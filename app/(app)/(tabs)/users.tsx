@@ -2,14 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AddUserModal from '../../../components/AddUserModal'; // <-- Import modal
 import CustomHeader from '../../../components/CustomHeader';
 import SearchBar from '../../../components/SearchBar';
 import { supabase } from '../../../lib/supabase';
@@ -25,6 +27,9 @@ export default function UsersScreen() {
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // State for the modal
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   // This function fetches all 'user' profiles from Supabase
   const fetchUsers = async () => {
@@ -50,6 +55,10 @@ export default function UsersScreen() {
       fetchUsers();
     }, [])
   );
+  
+  const onUserAdded = () => {
+    fetchUsers(); // Refresh the list
+  };
 
   // Filter users based on search query
   const filteredUsers = useMemo(() => {
@@ -57,6 +66,28 @@ export default function UsersScreen() {
       user.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [users, searchQuery]);
+  
+  const handleDeleteUser = (user: Profile) => {
+    Alert.alert(
+      'Delete User',
+      `Are you sure you want to delete ${user.username}? This will delete their profile but NOT their login.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteProfile(user.id) }
+      ]
+    );
+  };
+  
+  const deleteProfile = async (id: string) => {
+    // Note: This only deletes the 'profile' record.
+    // Deleting the 'auth.users' record requires an admin key.
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+    if (error) {
+      Alert.alert('Error', 'Failed to delete user profile.');
+    } else {
+      fetchUsers(); // Refresh
+    }
+  };
 
   // This is the component for each item in the list
   const renderUserItem = ({ item }: { item: Profile }) => (
@@ -68,10 +99,16 @@ export default function UsersScreen() {
         <Text style={styles.itemName}>{item.username}</Text>
       </View>
       <View style={styles.itemActions}>
-        <Pressable style={styles.actionButton} onPress={() => alert('Edit user: ' + item.username)}>
+        <Pressable 
+          style={styles.actionButton} 
+          onPress={() => alert('Edit user (coming soon)')}
+        >
           <Ionicons name="pencil" size={24} color="#007AFF" />
         </Pressable>
-        <Pressable style={styles.actionButton} onPress={() => alert('Delete user: ' + item.username)}>
+        <Pressable 
+          style={styles.actionButton} 
+          onPress={() => handleDeleteUser(item)}
+        >
           <Ionicons name="trash" size={24} color="#FF3B30" />
         </Pressable>
       </View>
@@ -101,18 +138,24 @@ export default function UsersScreen() {
         />
       )}
       
-      {/* --- Add User Button --- */}
+      {/* --- Updated FAB --- */}
       <Pressable 
         style={styles.fab} 
-        onPress={() => alert('Add User Modal will go here')}
+        onPress={() => setIsModalVisible(true)} // Open the modal
       >
         <Ionicons name="add" size={30} color="white" />
       </Pressable>
+      
+      {/* --- Add The Modal --- */}
+      <AddUserModal
+        visible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+        onSuccess={onUserAdded}
+      />
     </SafeAreaView>
   );
 }
 
-// Add styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -156,12 +199,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
   },
-  // Floating Action Button (FAB) for "Add User"
   fab: {
     position: 'absolute',
     right: 25,
     bottom: 25,
-    backgroundColor: '#4A00E0', // Purple
+    backgroundColor: '#4A00E0',
     width: 60,
     height: 60,
     borderRadius: 30,

@@ -78,7 +78,7 @@ function AuthProtectedLayout({ loaded }: { loaded: boolean }) {
       // Cast segments.length to 'number' to bypass TS error.
       // This checks if user is logged in and on 'login' OR at the root '/'.
       // If so, redirect them into the main app.
-      router.replace('/(app)' as any);
+      router.replace('/(app)/(tabs)/home' as any);
     }
   }, [session, loading, loaded, segments]);
 
