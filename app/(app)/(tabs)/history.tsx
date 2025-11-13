@@ -3,25 +3,24 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    Pressable,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../context/AuthContext';
 import { supabase } from '../../../lib/supabase';
 
-// Define type outside the component
 type DailyCollection = {
   id: number;
   amount: number;
-  accounts: {
+  customers: {
     name: string;
-  } | null; 
+  } | null;
 };
 
 export default function HistoryScreen() {
@@ -44,11 +43,11 @@ export default function HistoryScreen() {
 
     // --- FIX: Corrected query order ---
     const { data, error } = await supabase
-      .from('collections')
+      .from('transactions') // Was 'collections'
       .select(`
         id,
         amount,
-        accounts ( name )
+        customers ( name ) // Was 'accounts'
       `)
       .eq('user_id', profile.id) // Filter 1
       .gte('created_at', startDate.toISOString()) // Filter 2
@@ -89,7 +88,7 @@ export default function HistoryScreen() {
   const renderItem = ({ item }: { item: DailyCollection }) => (
     <View style={styles.itemContainer}>
       <Text style={styles.itemName}>
-        {item.accounts?.name || 'Unknown Account'}
+        {item.customers?.name || 'Unknown Customer'}
       </Text>
       <Text style={styles.itemAmount}>{item.amount.toFixed(1)}</Text>
     </View>
@@ -144,7 +143,7 @@ export default function HistoryScreen() {
   );
 }
 
-// Styles (unchanged)
+// (Styles are unchanged)
 const styles = StyleSheet.create({
   container: {
     flex: 1,

@@ -1,0 +1,317 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import EditCustomerModal from '../components/EditCustomerModal';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+
+// (Types and Helpers are unchanged)
+type Customer = {
+  id: number; name: string; shop_name: string; mobile_no: string;
+  aadhar_card_no: string; pan_card_no: string; address: string;
+  agent_id: string | null; initial_amount: number;
+  profiles: { username: string; } | null;
+};
+type Transaction = { id: number; created_at: string; amount: number; };
+const DetailRow = ({ label, value }: { label: string, value: string | null | undefined }) => (
+  <View style={styles.row}><Text style={styles.label}>{label}</Text><Text style={styles.value}>{value || 'N/A'}</Text></View>
+);
+const ListHeader = () => (
+  <View style={[styles.historyRow, styles.headerRow]}>
+    <Text style={[styles.cell, styles.headerText, { flex: 0.5 }]}>Sr</Text>
+    <Text style={[styles.cell, styles.headerText, { flex: 1.2 }]}>Date</Text>
+    <Text style={[styles.cell, styles.headerText]}>Txn No</Text>
+    <Text style={[styles.cell, styles.headerText]}>Credit</Text>
+    <Text style={[styles.cell, styles.headerText, { textAlign: 'right' }]}>Balance</Text>
+  </View>
+);
+
+export default function CustomerProfileScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
+  
+  const { customerId } = useLocalSearchParams<{ customerId: string }>();
+
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isProfileVisible, setIsProfileVisible] = useState(false); // State is still needed
+
+  // (fetchData, handleDeleteCustomer, deleteCustomer, data processing, and renderItem are unchanged)
+  const fetchData = async () => {
+    if (!customerId) return;
+    setLoading(true);
+    const [customerPromise, transPromise] = await Promise.all([
+      supabase.from('customers').select(`*, profiles ( username )`).eq('id', customerId).single(),
+      supabase.from('transactions').select('id, created_at, amount').eq('account_id', customerId).order('created_at', { ascending: true })
+    ]);
+    if (customerPromise.error) { Alert.alert('Error', 'Failed to fetch customer data'); }
+    else { setCustomer(customerPromise.data as Customer); }
+    if (transPromise.error) { console.error('Error fetching transactions:', transPromise.error.message); }
+    else { setTransactions(transPromise.data || []); }
+    setLoading(false);
+  };
+  useFocusEffect(useCallback(() => { fetchData(); }, [customerId]));
+  const handleDeleteCustomer = () => {
+    Alert.alert('Delete Customer', `Are you sure you want to delete ${customer?.name}?`,
+      [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: deleteCustomer }]
+    );
+  };
+  const deleteCustomer = async () => {
+    if (!customer) return;
+    const { error } = await supabase.from('customers').delete().eq('id', customer.id);
+    if (error) { Alert.alert('Error', 'Failed to delete customer.'); }
+    else { Alert.alert('Success', 'Customer deleted.'); router.back(); }
+  };
+  let runningBalance = customer?.initial_amount || 0;
+  const processedData = transactions.map((item, index) => {
+    runningBalance += item.amount;
+    return { ...item, sr: index + 1, date: new Date(item.created_at).toLocaleDateString('en-IN'), credit: item.amount, balance: runningBalance };
+  });
+  const totalBalance = runningBalance;
+  const renderItem = ({ item }: { item: (typeof processedData)[0] }) => (
+    <View style={styles.historyRow}>
+      <Text style={[styles.cell, { flex: 0.5 }]}>{item.sr}</Text>
+      <Text style={[styles.cell, { flex: 1.2 }]}>{item.date}</Text>
+      <Text style={styles.cell}>{item.id}</Text>
+      <Text style={[styles.cell, { textAlign: 'right' }]}>{item.credit.toFixed(1)}</Text>
+      <Text style={[styles.cell, { textAlign: 'right' }]}>{item.balance.toFixed(1)}</Text>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {/* --- HEADER (NOW WITH ICON BUTTON FOR ADMINS) --- */}
+      <View style={[styles.customHeader, { paddingTop: insets.top }]}>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </Pressable>
+        <Text style={styles.headerTitle}>{isAdmin ? 'Customer Profile' : 'Statement'}</Text>
+        
+        {/* Spacer */}
+        <View style={{ flex: 1 }} /> 
+
+        {/* Show button ONLY for Admins */}
+        {isAdmin && (
+          <Pressable 
+            onPress={() => setIsProfileVisible(!isProfileVisible)} 
+            style={styles.headerIconButton}
+          >
+            <Ionicons 
+              name={isProfileVisible ? "person" : "person-outline"} 
+              size={26} 
+              color="#4A00E0" 
+            />
+          </Pressable>
+        )}
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="large" style={{ flex: 1 }} />
+      ) : customer ? (
+        <ScrollView>
+          
+          {/* --- ADMIN ONLY: Customer Details (Now Toggleable) --- */}
+          {isAdmin && (
+            <>
+              {/* --- REMOVED: The old text toggle button is gone --- */}
+            
+              {/* Conditional Wrapper */}
+              {isProfileVisible && (
+                <>
+                  <View style={styles.profileCard}>
+                    <Ionicons name="person-circle" size={80} color="#78D1E8" />
+                    <Text style={styles.customerName}>{customer.name}</Text>
+                    <Text style={styles.customerSubtitle}>{customer.shop_name}</Text>
+                  </View>
+              
+                  <View style={styles.detailsContainer}>
+                    <DetailRow label="Assigned Agent" value={customer.profiles?.username} />
+                    <DetailRow label="Mobile No" value={customer.mobile_no} />
+                    <DetailRow label="Address" value={customer.address} />
+                    <DetailRow label="Aadhar No" value={customer.aadhar_card_no} />
+                    <DetailRow label="PAN No" value={customer.pan_card_no} />
+                  </View>
+              
+                  <View style={styles.buttonContainer}>
+                    <Pressable style={[styles.button, styles.editButton]} onPress={() => setIsModalVisible(true)}>
+                      <Ionicons name="pencil" size={20} color="white" />
+                      <Text style={styles.buttonText}>Edit Details</Text>
+                    </Pressable>
+                    <Pressable style={[styles.button, styles.deleteButton]} onPress={handleDeleteCustomer}>
+                      <Ionicons name="trash" size={20} color="white" />
+                      <Text style={styles.buttonText}>Delete Customer</Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
+            </>
+          )}
+
+          {/* --- AGENT & ADMIN: History (Always visible) --- */}
+          <Text style={styles.historyTitle}>Transaction History</Text>
+          {!isAdmin && (
+            <Text style={styles.agentCustomerName}>{customer.name}</Text>
+          )}
+
+          <View style={styles.listContainer}>
+            <ListHeader />
+            {transactions.length === 0 ? (
+              <Text style={styles.emptyText}>No transactions found.</Text>
+            ) : (
+              <FlatList
+                data={processedData}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={renderItem}
+                scrollEnabled={false}
+              />
+            )}
+          </View>
+          
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Opening:</Text>
+            <Text style={styles.footerBalance}>{(customer.initial_amount || 0).toFixed(1)}</Text>
+          </View>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Total Balance:</Text>
+            <Text style={styles.footerBalance}>{totalBalance.toFixed(1)}</Text>
+          </View>
+
+        </ScrollView>
+      ) : (
+        <Text style={styles.emptyText}>Customer not found.</Text>
+      )}
+      
+      <EditCustomerModal
+        visible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+        onSuccess={() => { fetchData(); setIsModalVisible(false); }}
+        customer={customer}
+      />
+    </SafeAreaView>
+  );
+}
+
+// --- STYLES (with new style added) ---
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f0f0f0' },
+  customHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 10,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  backButton: { padding: 10, marginLeft: 5 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', marginLeft: 10 },
+  // --- NEW: Header Icon Button Style ---
+  headerIconButton: {
+    padding: 10,
+    marginRight: 10,
+  },
+  // ---
+  profileCard: {
+    backgroundColor: 'white',
+    alignItems: 'center',
+    padding: 20,
+    marginHorizontal: 20,
+    marginTop: 20, // Added margin
+    borderRadius: 10,
+    elevation: 3,
+  },
+  customerName: { fontSize: 24, fontWeight: 'bold', marginTop: 10 },
+  customerSubtitle: { fontSize: 16, color: '#666', marginTop: 4 },
+  detailsContainer: {
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 10,
+    elevation: 3,
+    overflow: 'hidden',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  label: { fontSize: 16, color: '#555' },
+  value: { fontSize: 16, fontWeight: '600', color: '#333', maxWidth: '60%' },
+  buttonContainer: { marginTop: 30, paddingHorizontal: 20 },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+    elevation: 2,
+  },
+  editButton: { backgroundColor: '#4A00E0' },
+  deleteButton: { backgroundColor: '#D9534F' },
+  buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold', marginLeft: 10 },
+  emptyText: { textAlign: 'center', padding: 30, fontSize: 16, color: '#888' },
+  historyTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 30,
+    marginBottom: 10,
+    paddingHorizontal: 20,
+  },
+  agentCustomerName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#555',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    textAlign: 'center'
+  },
+  listContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+    marginHorizontal: 10,
+    borderRadius: 5,
+    elevation: 1,
+    marginBottom: 10,
+  },
+  headerRow: { backgroundColor: '#78D1E8', paddingVertical: 12 },
+  historyRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+  },
+  headerText: { color: '#3A4A64', fontWeight: 'bold' },
+  cell: { flex: 1, fontSize: 12, color: '#333', paddingHorizontal: 2 },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 15,
+    backgroundColor: '#f0f0f0',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    marginHorizontal: 10,
+    marginBottom: 2,
+  },
+  footerText: { fontSize: 16, fontWeight: 'bold' },
+  footerBalance: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+});

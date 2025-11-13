@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router'; // Import useRouter
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -11,134 +10,120 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AddUserModal from '../../../components/AddUserModal'; // <-- Import modal
+import AddAgentModal from '../../../components/AddAgentModal'; // <-- Import new modal
 import CustomHeader from '../../../components/CustomHeader';
 import SearchBar from '../../../components/SearchBar';
 import { supabase } from '../../../lib/supabase';
 
-// Define the type for our Profile data
-type Profile = {
+// Define the type for our Profile data (now 'Agent')
+type Agent = {
   id: string; // This is the UUID
   username: string;
   role: string;
+  mobile_no: string | null;
+  address: string | null;
+  aadhar_card_no: string | null;
 };
 
-export default function UsersScreen() {
-  const [users, setUsers] = useState<Profile[]>([]);
+export default function AgentsScreen() {
+  const router = useRouter(); // For navigation
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
   // State for the modal
   const [isModalVisible, setIsModalVisible] = useState(false);
 
-  // This function fetches all 'user' profiles from Supabase
-  const fetchUsers = async () => {
+  // This function fetches all 'user' (agent) profiles
+  const fetchAgents = async () => {
     setLoading(true);
     
+    // Select all the new fields
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, role')
-      .eq('role', 'user'); // Only fetch users, not other admins
+      .select('id, username, role, mobile_no, address, aadhar_card_no')
+      .eq('role', 'user'); // 'user' role is our 'agent'
 
     if (error) {
-      console.error('Error fetching users:', error.message);
-      alert('Failed to fetch users');
+      console.error('Error fetching agents:', error.message);
+      alert('Failed to fetch agents');
     } else {
-      setUsers(data || []);
+      setAgents(data || []);
     }
     setLoading(false);
   };
 
-  // useFocusEffect runs every time the screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      fetchUsers();
+      fetchAgents();
     }, [])
   );
   
-  const onUserAdded = () => {
-    fetchUsers(); // Refresh the list
+  const onAgentAdded = () => {
+    fetchAgents(); // Refresh the list
   };
 
-  // Filter users based on search query
-  const filteredUsers = useMemo(() => {
-    return users.filter(user =>
-      user.username.toLowerCase().includes(searchQuery.toLowerCase())
+  // Filter agents based on search query
+  const filteredAgents = useMemo(() => {
+    return agents.filter(agent =>
+      agent.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [users, searchQuery]);
+  }, [agents, searchQuery]);
   
-  const handleDeleteUser = (user: Profile) => {
-    Alert.alert(
-      'Delete User',
-      `Are you sure you want to delete ${user.username}? This will delete their profile but NOT their login.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteProfile(user.id) }
-      ]
-    );
-  };
-  
-  const deleteProfile = async (id: string) => {
-    // Note: This only deletes the 'profile' record.
-    // Deleting the 'auth.users' record requires an admin key.
-    const { error } = await supabase.from('profiles').delete().eq('id', id);
-    if (error) {
-      Alert.alert('Error', 'Failed to delete user profile.');
-    } else {
-      fetchUsers(); // Refresh
-    }
+  // --- NEW: Handle View Button Press ---
+  const handleViewAgent = (agent: Agent) => {
+    // We will create this screen next.
+    // We pass the agent's ID to the new screen.
+    router.push({
+      pathname: '/agent_profile', 
+      params: { agentId: agent.id }
+    });
   };
 
   // This is the component for each item in the list
-  const renderUserItem = ({ item }: { item: Profile }) => (
+  const renderAgentItem = ({ item }: { item: Agent }) => (
     <View style={styles.itemContainer}>
       <View style={styles.itemIcon}>
         <Ionicons name="person-circle" size={40} color="#78D1E8" />
       </View>
       <View style={styles.itemMiddle}>
         <Text style={styles.itemName}>{item.username}</Text>
+        <Text style={styles.itemSubtitle}>{item.mobile_no || 'No mobile'}</Text>
       </View>
-      <View style={styles.itemActions}>
-        <Pressable 
-          style={styles.actionButton} 
-          onPress={() => alert('Edit user (coming soon)')}
-        >
-          <Ionicons name="pencil" size={24} color="#007AFF" />
-        </Pressable>
-        <Pressable 
-          style={styles.actionButton} 
-          onPress={() => handleDeleteUser(item)}
-        >
-          <Ionicons name="trash" size={24} color="#FF3B30" />
-        </Pressable>
-      </View>
+      {/* --- NEW: View Button --- */}
+      <Pressable 
+        style={styles.viewButton} 
+        onPress={() => handleViewAgent(item)}
+      >
+        <Text style={styles.viewButtonText}>View</Text>
+      </Pressable>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <CustomHeader title="User Management" />
+      <CustomHeader title="Agent Management" />
 
       <SearchBar
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        placeholder="User Name"
+        placeholder="Agent Name"
       />
 
       {loading ? (
         <ActivityIndicator size="large" style={{ marginTop: 50 }} />
       ) : (
         <FlatList
-          data={filteredUsers}
-          renderItem={renderUserItem}
+          data={filteredAgents}
+          renderItem={renderAgentItem}
           keyExtractor={item => item.id}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>No users found.</Text>
+            <Text style={styles.emptyText}>No agents found.</Text>
           }
         />
       )}
       
-      {/* --- Updated FAB --- */}
+      {/* --- FAB to add agent --- */}
       <Pressable 
         style={styles.fab} 
         onPress={() => setIsModalVisible(true)} // Open the modal
@@ -147,10 +132,10 @@ export default function UsersScreen() {
       </Pressable>
       
       {/* --- Add The Modal --- */}
-      <AddUserModal
+      <AddAgentModal
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
-        onSuccess={onUserAdded}
+        onSuccess={onAgentAdded}
       />
     </SafeAreaView>
   );
@@ -170,10 +155,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
     marginVertical: 5,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   itemIcon: {
     marginRight: 10,
@@ -186,13 +167,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
-  itemActions: {
-    flexDirection: 'row',
+  itemSubtitle: {
+    fontSize: 14,
+    color: '#666',
   },
-  actionButton: {
-    marginLeft: 20,
-    padding: 5,
+  // --- NEW STYLES ---
+  viewButton: {
+    backgroundColor: '#4A00E0',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
   },
+  viewButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  // ---
   emptyText: {
     textAlign: 'center',
     marginTop: 30,
@@ -210,9 +201,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
   },
 });

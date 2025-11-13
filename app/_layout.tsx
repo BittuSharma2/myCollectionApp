@@ -78,7 +78,7 @@ function AuthProtectedLayout({ loaded }: { loaded: boolean }) {
       // Cast segments.length to 'number' to bypass TS error.
       // This checks if user is logged in and on 'login' OR at the root '/'.
       // If so, redirect them into the main app.
-      router.replace('/(app)/(tabs)/home' as any);
+      router.replace('/(app)/(tabs)/customers' as any);
     }
   }, [session, loading, loaded, segments]);
 
@@ -99,7 +99,9 @@ function AuthProtectedLayout({ loaded }: { loaded: boolean }) {
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         {/* Add the login screen to the navigator */}
         <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="statement" options={{ headerShown: false }} />
+        <Stack.Screen name="customer_profile" options={{ headerShown: false }} />
+        <Stack.Screen name="agent_profile" options={{ headerShown: false }} />
+
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

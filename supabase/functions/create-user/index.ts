@@ -2,19 +2,14 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 serve(async (req) => {
-  // 1. Create a Supabase Admin Client
-  // This client has full admin rights and is only on the server
+  // 1. Create Supabase Admin Client
   const supabaseAdmin = createClient(
-    // These Deno variables are set by Supabase when you deploy
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
-  // 2. Check if the person calling this function is an 'admin'
-  // We get their auth token from the 'Authorization' header
+  // 2. Check if the caller is an 'admin'
   const authHeader = req.headers.get('Authorization')!;
-  
-  // Get the user object from the token
   const { data: { user } } = await supabaseAdmin.auth.getUser(
     authHeader.replace('Bearer ', '')
   );
@@ -26,7 +21,6 @@ serve(async (req) => {
     });
   }
 
-  // Check their role in the 'profiles' table
   const { data: profile, error: profileError } = await supabaseAdmin
     .from('profiles')
     .select('role')
@@ -40,18 +34,25 @@ serve(async (req) => {
     });
   }
 
-  // 3. If they are an admin, proceed to create the new user
-  // Get the new user's details from the request body
-  const { email, password, username } = await req.json();
+  // 3. Get all the new agent details from the request body
+  const { 
+    email, 
+    password, 
+    username,
+    mobile_no,        // <-- NEW
+    address,          // <-- NEW
+    aadhar_card_no    // <-- NEW
+  } = await req.json();
 
-  if (!email || !password || !username) {
-    return new Response(JSON.stringify({ error: 'Missing fields' }), {
+  // 4. Check for required fields (Aadhar is optional)
+  if (!email || !password || !username || !mobile_no || !address) {
+    return new Response(JSON.stringify({ error: 'Missing required fields' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  // 4. Create the new user's login
+  // 5. Create the new user's login
   const { data: newUserData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email: email,
     password: password,
@@ -65,13 +66,17 @@ serve(async (req) => {
     });
   }
   
-  // 5. Create the new user's profile
+  // 6. Create the new user's profile with all the new details
   const { error: newProfileError } = await supabaseAdmin
     .from('profiles')
     .insert({
       id: newUserData.user.id,
+      email: email, // Also save the email here for convenience
       username: username,
-      role: 'user',
+      role: 'user', // 'user' is the agent role
+      mobile_no: mobile_no,         // <-- NEW
+      address: address,           // <-- NEW
+      aadhar_card_no: aadhar_card_no  // <-- NEW
     });
 
   if (newProfileError) {
@@ -81,8 +86,8 @@ serve(async (req) => {
     });
   }
   
-  // 6. Send a success response
-  return new Response(JSON.stringify({ message: 'User created successfully' }), {
+  // 7. Send a success response
+  return new Response(JSON.stringify({ message: 'Agent created successfully' }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
