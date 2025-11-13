@@ -101,6 +101,10 @@ function AuthProtectedLayout({ loaded }: { loaded: boolean }) {
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="customer_profile" options={{ headerShown: false }} />
         <Stack.Screen name="agent_profile" options={{ headerShown: false }} />
+        <Stack.Screen name="add_customer" options={{ headerShown: false }} />
+        <Stack.Screen name="add_agent" options={{ headerShown: false }} /> 
+        <Stack.Screen name="edit_agent" options={{ headerShown: false }} />
+        <Stack.Screen name="edit_customer" options={{ headerShown: false }} />
 
       </Stack>
       <StatusBar style="auto" />

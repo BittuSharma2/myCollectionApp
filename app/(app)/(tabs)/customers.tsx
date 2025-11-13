@@ -14,27 +14,32 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../context/AuthContext';
 import { supabase } from '../../../lib/supabase';
 
-// Import our custom components
 import AddCollectionModal from '../../../components/AddCollectionModal';
-import AddCustomerModal from '../../../components/AddCustomerModal';
 import CustomHeader from '../../../components/CustomHeader';
 import SearchBar from '../../../components/SearchBar';
 
-// Define the type for an Agent (for the filter list)
 type Agent = {
   id: string;
   username: string;
 };
 
-// Define the type for our Customer data
+// --- BACK TO THE ORIGINAL CUSTOMER TYPE ---
+// We add initial_amount to calculate the balance
 type Customer = {
   id: number;
   name: string;
   shop_name: string;
   agent_id: string | null;
-  profiles: { // This is an object, not an array
+  initial_amount: number; // <-- We need this
+  profiles: { // This is the agent's name
     username: string;
   } | null;
+};
+
+// This is the simplified type our Modal needs
+type SimplifiedCustomer = {
+  id: number;
+  name: string;
 };
 
 export default function CustomersScreen() {
@@ -43,74 +48,98 @@ export default function CustomersScreen() {
   const router = useRouter();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
+  
+  // --- NEW: State to hold the calculated balances ---
+  const [balances, setBalances] = useState<Map<number, number>>(new Map());
+  
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // State for Modals
   const [optionsVisibleFor, setOptionsVisibleFor] = useState<number | null>(null);
   const [isCollectionModalVisible, setIsCollectionModalVisible] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [isAddCustomerModalVisible, setIsAddCustomerModalVisible] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<SimplifiedCustomer | null>(null);
   
-  // State for Admin Filter
   const [agentsList, setAgentsList] = useState<Agent[]>([]);
   const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>('all');
 
-  // Fetch all agents (for the filter picker)
   const fetchAgentsForFilter = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, username')
-      .eq('role', 'user');
-    if (data) {
-      setAgentsList(data);
-    }
+    const { data } = await supabase.from('profiles').select('id, username').eq('role', 'user');
+    if (data) setAgentsList(data);
   };
 
-  // Fetch customers based on the filter and search
+  // --- UPDATED fetchCustomers Function ---
   const fetchCustomers = async () => {
     if (!profile) return;
     setLoading(true);
+    setCustomers([]); // Clear old data
+    setBalances(new Map()); // Clear old balances
 
+    // 1. Query the 'customers' table.
+    // This is 100% secure because of our RLS policy.
+    // Agents will ONLY get their assigned customers.
     let query = supabase
       .from('customers')
       .select(`
         id, name, shop_name, agent_id,
+        initial_amount,
         profiles ( username )
       `);
 
     if (isAdmin) {
-      if (selectedAgentFilter === 'none') {
-        query = query.is('agent_id', null);
-      } else if (selectedAgentFilter !== 'all') {
-        query = query.eq('agent_id', selectedAgentFilter);
-      }
-    } else {
-      query = query.eq('agent_id', profile.id);
+      if (selectedAgentFilter === 'none') query = query.is('agent_id', null);
+      else if (selectedAgentFilter !== 'all') query = query.eq('agent_id', selectedAgentFilter);
     }
+    if (searchQuery) query = query.ilike('name', `%${searchQuery}%`);
 
-    if (searchQuery) {
-      query = query.ilike('name', `%${searchQuery}%`);
-    }
-
-    // --- THIS IS THE FIX ---
-    const { data, error } = await query
+    const { data: customerData, error } = await query
       .order('name', { ascending: true })
-      .returns<Customer[]>(); // <-- Tell TS the correct return type
-    // --- END FIX ---
+      .returns<Customer[]>();
 
     if (error) {
       console.error('Error fetching customers:', error.message);
-    } else {
-      setCustomers(data || []); // This will now be type-safe
+      setLoading(false);
+      return;
     }
+    
+    if (customerData && customerData.length > 0) {
+      // 2. Now, fetch the balances for ONLY the customers we found
+      const customerIds = customerData.map(c => c.id);
+      
+      const { data: transactions, error: balanceError } = await supabase
+        .from('transactions')
+        .select('account_id, amount')
+        .in('account_id', customerIds);
+        
+      if (balanceError) {
+        console.error('Error fetching balances:', balanceError.message);
+      }
+      
+      // 3. Calculate the balances
+      const balanceMap = new Map<number, number>();
+      for (const customer of customerData) {
+        // Start with the initial_amount (or 0)
+        balanceMap.set(customer.id, customer.initial_amount || 0);
+      }
+      
+      if (transactions) {
+        for (const transaction of transactions) {
+          const currentBalance = balanceMap.get(transaction.account_id) || 0;
+          balanceMap.set(transaction.account_id, currentBalance + transaction.amount);
+        }
+      }
+      
+      setBalances(balanceMap);
+      setCustomers(customerData);
+      
+    } else {
+      setCustomers([]); // No customers found
+    }
+    
     setLoading(false);
   };
 
   useEffect(() => {
-    if (isAdmin) {
-      fetchAgentsForFilter();
-    }
+    if (isAdmin) fetchAgentsForFilter();
   }, [isAdmin]);
 
   useFocusEffect(
@@ -121,43 +150,32 @@ export default function CustomersScreen() {
 
   // --- Handlers ---
   const handleCollectPress = (customer: Customer) => {
-    setSelectedCustomer(customer);
+    setSelectedCustomer({ id: customer.id, name: customer.name });
     setIsCollectionModalVisible(true);
     setOptionsVisibleFor(null);
   };
-
   const handleStatePress = (customer: Customer) => {
-    router.push({
-      // This is correct, but TS is stale.
-      pathname: '/customer_profile' as any, 
-      params: { customerId: customer.id },
-    });
+    router.push({ pathname: '/customer_profile' as any, params: { customerId: customer.id } });
     setOptionsVisibleFor(null);
   };
-  
   const handleViewPress = (customer: Customer) => {
-    router.push({
-      // This is correct, but TS is stale.
-      pathname: '/customer_profile' as any,
-      params: { customerId: customer.id },
-    });
+    router.push({ pathname: '/customer_profile' as any, params: { customerId: customer.id } });
     setOptionsVisibleFor(null);
   };
 
-  // Modal Success Handlers
   const onCollectionSuccess = () => {
     setIsCollectionModalVisible(false);
     setSelectedCustomer(null);
-  };
-  const onCustomerAdded = () => {
-    setIsAddCustomerModalVisible(false);
-    fetchCustomers();
+    fetchCustomers(); // Refresh all data
   };
 
-  // --- Render Functions ---
+  // --- UPDATED renderCustomerItem Function ---
   const renderCustomerItem = ({ item }: { item: Customer }) => {
     const isSelected = optionsVisibleFor === item.id;
     const agentName = item.profiles?.username || 'Unassigned';
+    
+    // Get the balance from our state
+    const totalBalance = balances.get(item.id) || item.initial_amount || 0;
 
     return (
       <Pressable
@@ -191,14 +209,16 @@ export default function CustomersScreen() {
               </>
             )
           ) : (
-            <Ionicons name="chevron-forward" size={24} color="#ccc" />
+            <View style={styles.balanceContainer}>
+              <Text style={styles.balanceText}>₹{totalBalance.toFixed(1)}</Text>
+            </View>
           )}
         </View>
       </Pressable>
     );
   };
   
-  // --- Main Render ---
+  // (Main Render is unchanged)
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <CustomHeader title={isAdmin ? 'Customers' : 'My Customers'} />
@@ -235,9 +255,7 @@ export default function CustomersScreen() {
           data={customers}
           renderItem={renderCustomerItem}
           keyExtractor={item => item.id.toString()}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>No customers found.</Text>
-          }
+          ListEmptyComponent={<Text style={styles.emptyText}>No customers found.</Text>}
           onScroll={() => setOptionsVisibleFor(null)} 
         />
       )}
@@ -248,16 +266,11 @@ export default function CustomersScreen() {
         account={selectedCustomer}
         onSuccess={onCollectionSuccess}
       />
-      <AddCustomerModal
-        visible={isAddCustomerModalVisible}
-        onClose={() => setIsAddCustomerModalVisible(false)}
-        onSuccess={onCustomerAdded}
-      />
 
       {isAdmin && (
         <Pressable 
           style={styles.fab} 
-          onPress={() => setIsAddCustomerModalVisible(true)}
+          onPress={() => router.push('/add_customer')}
         >
           <Ionicons name="add" size={30} color="white" />
         </Pressable>
@@ -268,100 +281,31 @@ export default function CustomersScreen() {
 
 // (Styles are unchanged)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  filterContainer: {
-    paddingHorizontal: 15,
-    paddingTop: 10,
-  },
-  filterLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    marginTop: 5,
-  },
-  picker: {
-    width: '100%',
-    height: 50,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 30,
-    fontSize: 16,
-    color: '#888',
-  },
-  itemContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#f9f9f9',
-    borderRadius: 10,
-    padding: 15,
-    marginHorizontal: 15,
-    marginVertical: 5,
-    elevation: 2,
-    minHeight: 70,
-  },
-  itemMiddle: {
-    flex: 1,
+  container: { flex: 1, backgroundColor: '#fff' },
+  filterContainer: { paddingHorizontal: 15, paddingTop: 10 },
+  filterLabel: { fontSize: 14, color: '#666' },
+  pickerContainer: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 8, marginTop: 5 },
+  picker: { width: '100%', height: 50 },
+  emptyText: { textAlign: 'center', marginTop: 30, fontSize: 16, color: '#888' },
+  itemContainer: { flexDirection: 'row', backgroundColor: '#f9f9f9', borderRadius: 10, padding: 15, marginHorizontal: 15, marginVertical: 5, elevation: 2, minHeight: 70 },
+  itemMiddle: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
+  itemName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  itemSubtitle: { fontSize: 14, color: '#555' },
+  itemAgent: { fontSize: 13, color: '#4A00E0', fontStyle: 'italic', marginTop: 2 },
+  itemActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', minWidth: 90 },
+  actionButton: { marginLeft: 15, alignItems: 'center' },
+  actionText: { fontSize: 12, color: '#555', marginTop: 2 },
+  viewButton: { backgroundColor: '#4A00E0', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+  viewButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  balanceContainer: {
     justifyContent: 'center',
-    paddingHorizontal: 10,
+    alignItems: 'flex-end',
+    minWidth: 90,
   },
-  itemName: {
+  balanceText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
   },
-  itemSubtitle: {
-    fontSize: 14,
-    color: '#555',
-  },
-  itemAgent: {
-    fontSize: 13,
-    color: '#4A00E0',
-    fontStyle: 'italic',
-    marginTop: 2,
-  },
-  itemActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    minWidth: 90,
-  },
-  actionButton: {
-    marginLeft: 15,
-    alignItems: 'center',
-  },
-  actionText: {
-    fontSize: 12,
-    color: '#555',
-    marginTop: 2,
-  },
-  viewButton: {
-    backgroundColor: '#4A00E0',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  viewButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  fab: {
-    position: 'absolute',
-    right: 25,
-    bottom: 25,
-    backgroundColor: '#4A00E0',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-  },
+  fab: { position: 'absolute', right: 25, bottom: 25, backgroundColor: '#4A00E0', width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 8 },
 });

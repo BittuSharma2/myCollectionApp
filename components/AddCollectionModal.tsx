@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -48,7 +48,7 @@ export default function AddCollectionModal({
     setLoading(true);
 
     // Insert into the 'collections' table
-    const { error } = await supabase.from('collections').insert({
+    const { error } = await supabase.from('transactions').insert({
       amount: parsedAmount,
       account_id: account.id,
       user_id: profile.id, // The ID of the logged-in user

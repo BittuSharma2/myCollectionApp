@@ -12,9 +12,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import EditCustomerModal from '../components/EditCustomerModal';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+// --- EditCustomerModal is no longer needed ---
 
 // (Types and Helpers are unchanged)
 type Customer = {
@@ -49,10 +49,10 @@ export default function CustomerProfileScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [isProfileVisible, setIsProfileVisible] = useState(false); // State is still needed
+  // --- No more modal state needed ---
+  const [isProfileVisible, setIsProfileVisible] = useState(false);
 
-  // (fetchData, handleDeleteCustomer, deleteCustomer, data processing, and renderItem are unchanged)
+  // (fetchData is unchanged)
   const fetchData = async () => {
     if (!customerId) return;
     setLoading(true);
@@ -66,7 +66,15 @@ export default function CustomerProfileScreen() {
     else { setTransactions(transPromise.data || []); }
     setLoading(false);
   };
-  useFocusEffect(useCallback(() => { fetchData(); }, [customerId]));
+
+  // --- useFocusEffect is important to refresh data after editing ---
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [customerId])
+  );
+  
+  // (handleDeleteCustomer and deleteCustomer are unchanged)
   const handleDeleteCustomer = () => {
     Alert.alert('Delete Customer', `Are you sure you want to delete ${customer?.name}?`,
       [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: deleteCustomer }]
@@ -78,6 +86,8 @@ export default function CustomerProfileScreen() {
     if (error) { Alert.alert('Error', 'Failed to delete customer.'); }
     else { Alert.alert('Success', 'Customer deleted.'); router.back(); }
   };
+
+  // (Data processing and renderItem are unchanged)
   let runningBalance = customer?.initial_amount || 0;
   const processedData = transactions.map((item, index) => {
     runningBalance += item.amount;
@@ -96,27 +106,15 @@ export default function CustomerProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* --- HEADER (NOW WITH ICON BUTTON FOR ADMINS) --- */}
       <View style={[styles.customHeader, { paddingTop: insets.top }]}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </Pressable>
         <Text style={styles.headerTitle}>{isAdmin ? 'Customer Profile' : 'Statement'}</Text>
-        
-        {/* Spacer */}
         <View style={{ flex: 1 }} /> 
-
-        {/* Show button ONLY for Admins */}
         {isAdmin && (
-          <Pressable 
-            onPress={() => setIsProfileVisible(!isProfileVisible)} 
-            style={styles.headerIconButton}
-          >
-            <Ionicons 
-              name={isProfileVisible ? "person" : "person-outline"} 
-              size={26} 
-              color="#4A00E0" 
-            />
+          <Pressable onPress={() => setIsProfileVisible(!isProfileVisible)} style={styles.headerIconButton}>
+            <Ionicons name={isProfileVisible ? "person" : "person-outline"} size={26} color="#4A00E0" />
           </Pressable>
         )}
       </View>
@@ -126,12 +124,8 @@ export default function CustomerProfileScreen() {
       ) : customer ? (
         <ScrollView>
           
-          {/* --- ADMIN ONLY: Customer Details (Now Toggleable) --- */}
           {isAdmin && (
             <>
-              {/* --- REMOVED: The old text toggle button is gone --- */}
-            
-              {/* Conditional Wrapper */}
               {isProfileVisible && (
                 <>
                   <View style={styles.profileCard}>
@@ -149,7 +143,14 @@ export default function CustomerProfileScreen() {
                   </View>
               
                   <View style={styles.buttonContainer}>
-                    <Pressable style={[styles.button, styles.editButton]} onPress={() => setIsModalVisible(true)}>
+                    <Pressable 
+                      style={[styles.button, styles.editButton]} 
+                      // --- THIS IS THE CHANGE ---
+                      onPress={() => router.push({ 
+                        pathname: '/edit_customer', 
+                        params: { customerId: customer.id } 
+                      })}
+                    >
                       <Ionicons name="pencil" size={20} color="white" />
                       <Text style={styles.buttonText}>Edit Details</Text>
                     </Pressable>
@@ -163,12 +164,11 @@ export default function CustomerProfileScreen() {
             </>
           )}
 
-          {/* --- AGENT & ADMIN: History (Always visible) --- */}
+          {/* (History list is unchanged) */}
           <Text style={styles.historyTitle}>Transaction History</Text>
           {!isAdmin && (
             <Text style={styles.agentCustomerName}>{customer.name}</Text>
           )}
-
           <View style={styles.listContainer}>
             <ListHeader />
             {transactions.length === 0 ? (
@@ -182,7 +182,6 @@ export default function CustomerProfileScreen() {
               />
             )}
           </View>
-          
           <View style={styles.footer}>
             <Text style={styles.footerText}>Opening:</Text>
             <Text style={styles.footerBalance}>{(customer.initial_amount || 0).toFixed(1)}</Text>
@@ -197,121 +196,40 @@ export default function CustomerProfileScreen() {
         <Text style={styles.emptyText}>Customer not found.</Text>
       )}
       
-      <EditCustomerModal
-        visible={isModalVisible}
-        onClose={() => setIsModalVisible(false)}
-        onSuccess={() => { fetchData(); setIsModalVisible(false); }}
-        customer={customer}
-      />
+      {/* --- The Modal is removed --- */}
+
     </SafeAreaView>
   );
 }
 
-// --- STYLES (with new style added) ---
+// (Styles are unchanged)
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f0f0' },
-  customHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: 10,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
+  customHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 10, backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
   backButton: { padding: 10, marginLeft: 5 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', marginLeft: 10 },
-  // --- NEW: Header Icon Button Style ---
-  headerIconButton: {
-    padding: 10,
-    marginRight: 10,
-  },
-  // ---
-  profileCard: {
-    backgroundColor: 'white',
-    alignItems: 'center',
-    padding: 20,
-    marginHorizontal: 20,
-    marginTop: 20, // Added margin
-    borderRadius: 10,
-    elevation: 3,
-  },
+  headerIconButton: { padding: 10, marginRight: 10 },
+  profileCard: { backgroundColor: 'white', alignItems: 'center', padding: 20, marginHorizontal: 20, marginTop: 20, borderRadius: 10, elevation: 3 },
   customerName: { fontSize: 24, fontWeight: 'bold', marginTop: 10 },
   customerSubtitle: { fontSize: 16, color: '#666', marginTop: 4 },
-  detailsContainer: {
-    backgroundColor: 'white',
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 10,
-    elevation: 3,
-    overflow: 'hidden',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
+  detailsContainer: { backgroundColor: 'white', marginHorizontal: 20, marginTop: 20, borderRadius: 10, elevation: 3, overflow: 'hidden' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   label: { fontSize: 16, color: '#555' },
   value: { fontSize: 16, fontWeight: '600', color: '#333', maxWidth: '60%' },
   buttonContainer: { marginTop: 30, paddingHorizontal: 20 },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-    elevation: 2,
-  },
+  button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 15, borderRadius: 10, marginBottom: 15, elevation: 2 },
   editButton: { backgroundColor: '#4A00E0' },
   deleteButton: { backgroundColor: '#D9534F' },
   buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold', marginLeft: 10 },
   emptyText: { textAlign: 'center', padding: 30, fontSize: 16, color: '#888' },
-  historyTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 30,
-    marginBottom: 10,
-    paddingHorizontal: 20,
-  },
-  agentCustomerName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#555',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    textAlign: 'center'
-  },
-  listContainer: {
-    flex: 1,
-    backgroundColor: 'white',
-    marginHorizontal: 10,
-    borderRadius: 5,
-    elevation: 1,
-    marginBottom: 10,
-  },
+  historyTitle: { fontSize: 22, fontWeight: 'bold', color: '#333', marginTop: 30, marginBottom: 10, paddingHorizontal: 20 },
+  agentCustomerName: { fontSize: 18, fontWeight: '600', color: '#555', paddingHorizontal: 20, marginBottom: 20, textAlign: 'center' },
+  listContainer: { flex: 1, backgroundColor: 'white', marginHorizontal: 10, borderRadius: 5, elevation: 1, marginBottom: 10 },
   headerRow: { backgroundColor: '#78D1E8', paddingVertical: 12 },
-  historyRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-  },
+  historyRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#eee', paddingVertical: 10, paddingHorizontal: 5 },
   headerText: { color: '#3A4A64', fontWeight: 'bold' },
   cell: { flex: 1, fontSize: 12, color: '#333', paddingHorizontal: 2 },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 15,
-    backgroundColor: '#f0f0f0',
-    borderTopWidth: 1,
-    borderTopColor: '#ddd',
-    marginHorizontal: 10,
-    marginBottom: 2,
-  },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, backgroundColor: '#f0f0f0', borderTopWidth: 1, borderTopColor: '#ddd', marginHorizontal: 10, marginBottom: 2 },
   footerText: { fontSize: 16, fontWeight: 'bold' },
   footerBalance: { fontSize: 16, fontWeight: 'bold', color: '#333' },
 });

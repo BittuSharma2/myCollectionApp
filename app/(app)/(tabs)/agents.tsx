@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router'; // Import useRouter
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,14 +10,14 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AddAgentModal from '../../../components/AddAgentModal'; // <-- Import new modal
 import CustomHeader from '../../../components/CustomHeader';
 import SearchBar from '../../../components/SearchBar';
 import { supabase } from '../../../lib/supabase';
+// --- AddAgentModal is no longer needed ---
 
-// Define the type for our Profile data (now 'Agent')
+// (Agent type is unchanged)
 type Agent = {
-  id: string; // This is the UUID
+  id: string;
   username: string;
   role: string;
   mobile_no: string | null;
@@ -26,23 +26,19 @@ type Agent = {
 };
 
 export default function AgentsScreen() {
-  const router = useRouter(); // For navigation
+  const router = useRouter();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // State for the modal
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  // --- No more modal state needed ---
 
-  // This function fetches all 'user' (agent) profiles
   const fetchAgents = async () => {
     setLoading(true);
-    
-    // Select all the new fields
     const { data, error } = await supabase
       .from('profiles')
       .select('id, username, role, mobile_no, address, aadhar_card_no')
-      .eq('role', 'user'); // 'user' role is our 'agent'
+      .eq('role', 'user');
 
     if (error) {
       console.error('Error fetching agents:', error.message);
@@ -59,28 +55,24 @@ export default function AgentsScreen() {
     }, [])
   );
   
-  const onAgentAdded = () => {
-    fetchAgents(); // Refresh the list
-  };
+  // (onAgentAdded is no longer needed, fetch is handled by useFocusEffect)
 
-  // Filter agents based on search query
+  // (filteredAgents is unchanged)
   const filteredAgents = useMemo(() => {
     return agents.filter(agent =>
       agent.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [agents, searchQuery]);
   
-  // --- NEW: Handle View Button Press ---
+  // (handleViewAgent is unchanged)
   const handleViewAgent = (agent: Agent) => {
-    // We will create this screen next.
-    // We pass the agent's ID to the new screen.
     router.push({
       pathname: '/agent_profile', 
       params: { agentId: agent.id }
     });
   };
 
-  // This is the component for each item in the list
+  // (renderAgentItem is unchanged)
   const renderAgentItem = ({ item }: { item: Agent }) => (
     <View style={styles.itemContainer}>
       <View style={styles.itemIcon}>
@@ -90,7 +82,6 @@ export default function AgentsScreen() {
         <Text style={styles.itemName}>{item.username}</Text>
         <Text style={styles.itemSubtitle}>{item.mobile_no || 'No mobile'}</Text>
       </View>
-      {/* --- NEW: View Button --- */}
       <Pressable 
         style={styles.viewButton} 
         onPress={() => handleViewAgent(item)}
@@ -126,80 +117,28 @@ export default function AgentsScreen() {
       {/* --- FAB to add agent --- */}
       <Pressable 
         style={styles.fab} 
-        onPress={() => setIsModalVisible(true)} // Open the modal
+        // --- THIS IS THE CHANGE ---
+        onPress={() => router.push('/add_agent')}
       >
         <Ionicons name="add" size={30} color="white" />
       </Pressable>
       
-      {/* --- Add The Modal --- */}
-      <AddAgentModal
-        visible={isModalVisible}
-        onClose={() => setIsModalVisible(false)}
-        onSuccess={onAgentAdded}
-      />
+      {/* --- The Modal is removed --- */}
+
     </SafeAreaView>
   );
 }
 
+// (Styles are unchanged)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  itemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f9f9f9',
-    borderRadius: 10,
-    padding: 10,
-    marginHorizontal: 15,
-    marginVertical: 5,
-    elevation: 2,
-  },
-  itemIcon: {
-    marginRight: 10,
-  },
-  itemMiddle: {
-    flex: 1,
-  },
-  itemName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  itemSubtitle: {
-    fontSize: 14,
-    color: '#666',
-  },
-  // --- NEW STYLES ---
-  viewButton: {
-    backgroundColor: '#4A00E0',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  viewButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  // ---
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 30,
-    fontSize: 16,
-    color: '#888',
-  },
-  fab: {
-    position: 'absolute',
-    right: 25,
-    bottom: 25,
-    backgroundColor: '#4A00E0',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
+  itemContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 10, padding: 10, marginHorizontal: 15, marginVertical: 5, elevation: 2 },
+  itemIcon: { marginRight: 10 },
+  itemMiddle: { flex: 1 },
+  itemName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  itemSubtitle: { fontSize: 14, color: '#666' },
+  viewButton: { backgroundColor: '#4A00E0', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+  viewButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  emptyText: { textAlign: 'center', marginTop: 30, fontSize: 16, color: '#888' },
+  fab: { position: 'absolute', right: 25, bottom: 25, backgroundColor: '#4A00E0', width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 8 },
 });
