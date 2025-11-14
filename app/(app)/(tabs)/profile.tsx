@@ -11,11 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomHeader from '../../../components/CustomHeader';
-import { Colors } from '../../../constants/theme'; // <-- Import your new theme
+import { Colors } from '../../../constants/theme';
 import { useAuth } from '../../../context/AuthContext';
 
-// --- (THE FIX) ---
-// DetailRow now uses the global 'styles' and gets themeColors passed in
+// --- Theme-aware DetailRow Component ---
 const DetailRow = ({
   label,
   value,
@@ -36,13 +35,11 @@ const DetailRow = ({
 );
 
 export default function ProfileScreen() {
-  const { signOut, profile } = useAuth();
+  const { signOut, profile } = useAuth(); // Get the user's profile
   const router = useRouter();
 
-  // --- NEW: Get theme and colors ---
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
-  // ---
 
   const [loading, setLoading] = useState(false);
 
@@ -52,8 +49,6 @@ export default function ProfileScreen() {
     setLoading(false);
   };
 
-  // --- (THE FIX) ---
-  // The loading block now works because 'styles' is global.
   if (!profile) {
     return (
       <SafeAreaView
@@ -68,6 +63,11 @@ export default function ProfileScreen() {
     );
   }
 
+  // --- (THE FIX) ---
+  // Check if the user is an admin
+  const isAdmin = profile.role === 'admin';
+  // --- (END FIX) ---
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: themeColors.background }]}
@@ -78,7 +78,7 @@ export default function ProfileScreen() {
         <Ionicons
           name="person-circle"
           size={80}
-          color={themeColors.icon} // Dynamic
+          color={themeColors.icon}
         />
         <Text style={[styles.agentName, { color: themeColors.text }]}>
           {profile.username}
@@ -108,22 +108,30 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.buttonContainer}>
-        <Pressable
-          style={[styles.button, { backgroundColor: themeColors.buttonDefault }]}
-          onPress={() => router.push('/modal')}>
-          <Ionicons
-            name="lock-closed-outline"
-            size={20}
-            color={themeColors.buttonDefaultText}
-          />
-          <Text
+        {/* --- (THE FIX) --- */}
+        {/* Only show the "Change Password" button if the user is an Admin */}
+        {isAdmin && (
+          <Pressable
             style={[
-              styles.buttonText,
-              { color: themeColors.buttonDefaultText },
-            ]}>
-            Change Password
-          </Text>
-        </Pressable>
+              styles.button,
+              { backgroundColor: themeColors.buttonDefault },
+            ]}
+            onPress={() => router.push('/modal')}>
+            <Ionicons
+              name="lock-closed-outline"
+              size={20}
+              color={themeColors.buttonDefaultText}
+            />
+            <Text
+              style={[
+                styles.buttonText,
+                { color: themeColors.buttonDefaultText },
+              ]}>
+              Change Password
+            </Text>
+          </Pressable>
+        )}
+        {/* --- (END FIX) --- */}
 
         <Pressable
           style={[styles.button, { backgroundColor: themeColors.danger }]}
@@ -153,9 +161,7 @@ export default function ProfileScreen() {
   );
 }
 
-// --- (THE FIX) ---
-// Styles are now defined OUTSIDE the component.
-// Only static styles are here. Dynamic colors are applied inline.
+// (Styles are unchanged)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
