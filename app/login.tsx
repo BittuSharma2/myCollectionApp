@@ -1,72 +1,35 @@
-import { Ionicons } from '@expo/vector-icons'; // Using icons for the button
-import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert, // Kept for your future logo
+  KeyboardAvoidingView, // <-- For keyboard
+  Platform,
+  Pressable, // <-- For keyboard
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput, // <-- For keyboard
+  useColorScheme,
+  View
+} from 'react-native';
+import { Colors } from '../constants/theme'; // <-- Import your theme
 import { supabase } from '../lib/supabase';
 
-// Basic styles to match your design
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#3A4A64', // Dark blue/grey area
-  },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    alignItems: 'center',
-    backgroundColor: '#78D1E8', // Light blue area
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#4A00E0', // Purple
-  },
-  body: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-  },
-  welcomeText: {
-    fontSize: 26,
-    color: 'white',
-    marginBottom: 20,
-  },
-  input: {
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-    fontSize: 16,
-  },
-  signInText: {
-    fontSize: 20,
-    color: 'white',
-    marginBottom: 10,
-  },
-  signInButton: {
-    backgroundColor: '#34A853', // Green color
-    padding: 15,
-    borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 60,
-    height: 60,
-    alignSelf: 'flex-end',
-  },
-});
-
 export default function LoginScreen() {
-  // We'll use email for "Login ID" as Supabase auth prefers it
-  const [email, setEmail] = useState(''); 
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // <-- UI enhancement
+
+  // --- NEW: Get theme and colors ---
+  const colorScheme = useColorScheme() ?? 'light';
+  const themeColors = Colors[colorScheme];
+  // ---
 
   const handleLogin = async () => {
     if (loading) return;
     setLoading(true);
-
-    // Use Supabase to sign in
     const { error } = await supabase.auth.signInWithPassword({
       email: email,
       password: password,
@@ -75,46 +38,147 @@ export default function LoginScreen() {
     if (error) {
       Alert.alert('Login Failed', error.message);
     }
-    // If successful, the AuthContext's onAuthStateChange
-    // will automatically pick it up, and our app will redirect.
+    // If successful, AuthContext will handle the redirect
     setLoading(false);
   };
 
-  return (
-    <View style={styles.container}>
-      {/* Header from your design */}
-      <View style={styles.header}>
-        {/* You can add the logo images here if you have them in /assets */}
-        <Text style={styles.headerTitle}>YASHVI COLLECTION</Text>
-      </View>
+  // --- NEW: Dynamic styles ---
+  // We create styles inside the component to access themeColors
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: themeColors.background, // Dynamic
+    },
+    scrollContainer: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+    },
+    logo: {
+      width: 120,
+      height: 120,
+      resizeMode: 'contain',
+      marginBottom: 20,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: themeColors.text, // Dynamic
+      marginBottom: 30,
+    },
+    formContainer: {
+      width: '100%',
+    },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: themeColors.input, // Dynamic
+      borderRadius: 10,
+      paddingHorizontal: 15,
+      marginBottom: 15,
+      borderWidth: 1,
+      borderColor: themeColors.borderColor, // Dynamic
+    },
+    icon: {
+      marginRight: 10,
+    },
+    input: {
+      flex: 1,
+      height: 50,
+      fontSize: 16,
+      color: themeColors.text, // Dynamic
+    },
+    button: {
+      width: '100%',
+      padding: 15,
+      borderRadius: 10,
+      alignItems: 'center',
+      marginTop: 10,
+    },
+    signInButton: {
+      backgroundColor: themeColors.buttonPrimary, // Dynamic
+    },
+    signInButtonText: {
+      color: themeColors.buttonPrimaryText, // Dynamic
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+  });
+  // ---
 
-      {/* Body with login form */}
-      <View style={styles.body}>
-        <Text style={styles.welcomeText}>Welcome</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Login ID (Email)"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        {/* I have commented out the Image to prevent the build error.
+            You can add your logo here later. */}
+        {/*
+        <Image
+          source={require('../assets/images/login-icon.png')}
+          style={styles.logo}
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-        <Text style={styles.signInText}>Sign in</Text>
-        <Pressable
-          style={styles.signInButton}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          <Ionicons name="arrow-forward" size={24} color="white" />
-        </Pressable>
-      </View>
-    </View>
+        */}
+        <View style={{ height: 140 }} />
+
+        <Text style={styles.title}>Yashvi Collection</Text>
+
+        <View style={styles.formContainer}>
+          <View style={styles.inputContainer}>
+            <Ionicons
+              name="mail-outline"
+              size={20}
+              color={themeColors.textSecondary} // Dynamic
+              style={styles.icon}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={themeColors.textSecondary} // Dynamic
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons
+              name="lock-closed-outline"
+              size={20}
+              color={themeColors.textSecondary} // Dynamic
+              style={styles.icon}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={themeColors.textSecondary} // Dynamic
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+            />
+            <Pressable onPress={() => setShowPassword(!showPassword)}>
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={24}
+                color={themeColors.textSecondary} // Dynamic
+              />
+            </Pressable>
+          </View>
+
+          <Pressable
+            style={[styles.button, styles.signInButton]}
+            onPress={handleLogin}
+            disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color={themeColors.buttonPrimaryText} />
+            ) : (
+              <Text style={styles.signInButtonText}>Sign In</Text>
+            )}
+          </Pressable>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

@@ -12,8 +12,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 // --- EditCustomerModal is no longer needed ---
 
 // (Types and Helpers are unchanged)

@@ -1,20 +1,28 @@
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import {
+  ActivityIndicator,
+  StyleSheet,
+  useColorScheme,
+  View,
+} from 'react-native';
+import { Colors } from '../../../constants/theme'; // <-- Import our new Colors
 import { useAuth } from '../../../context/AuthContext';
 
 export default function TabLayout() {
-  const { profile, loading } = useAuth();
-  const colorScheme = useColorScheme();
-  const activeColor = useThemeColor({ light: undefined, dark: undefined }, 'tint');
+  const { profile, loading } = useAuth(); // Get profile
+  const colorScheme = useColorScheme() ?? 'light';
+  const themeColors = Colors[colorScheme];
 
-  if (loading) {
+  // Wait for profile to load before deciding which tabs to show
+  if (loading || !profile) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: themeColors.background },
+        ]}>
+        <ActivityIndicator size="large" color={themeColors.tint} />
       </View>
     );
   }
@@ -24,48 +32,94 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: activeColor,
+        headerShown: false,
+        // --- NEW: Theme styles ---
+        tabBarActiveTintColor: themeColors.tint,
+        tabBarInactiveTintColor: themeColors.tabIconDefault,
+        tabBarStyle: {
+          backgroundColor: themeColors.tabBar,
+          borderTopColor: themeColors.borderColor,
+        },
       }}>
       
-      {/* This is now the 'customers.tsx' file.
-        Title is "Customers" for Admins, "Home" for Agents
-      */}
+      {/* --- THE FIX ---
+          This is your 'customers.tsx' file.
+          It is the main tab for BOTH roles.
+      --- */}
       <Tabs.Screen
-        name="customers"  // <-- CHANGED
+        name="customers" 
         options={{
-          title: isAdmin ? 'Customers' : 'Home', // <-- CHANGED
-          headerShown: false,
-          tabBarIcon: ({ color }) => (
-            <Ionicons name={isAdmin ? "briefcase-outline" : "home-outline"} size={28} color={color} />
+          title: isAdmin ? 'Customers' : 'Home', // Dynamic title
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              // Dynamic icon
+              name={
+                isAdmin
+                  ? focused ? 'people' : 'people-outline'
+                  : focused ? 'home' : 'home-outline'
+              }
+              size={24}
+              color={color}
+            />
           ),
+          // This tab is always shown, so href is not needed
+        }}
+      />
+      
+      {/* --- ADMIN: Agents Tab --- */}
+      <Tabs.Screen
+        name="agents" // This is app/(app)/(tabs)/agents.tsx
+        options={{
+          title: 'Agents',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'briefcase' : 'briefcase-outline'}
+              size={24}
+              color={color}
+            />
+          ),
+          href: isAdmin ? '/(app)/(tabs)/agents' : null, // Only show for Admin
         }}
       />
 
-      {/* This is the 'history.tsx' file.
-        It is hidden for Admins.
-      */}
+      {/* --- AGENT: History Tab --- */}
       <Tabs.Screen
-        name="history"
+        name="history" // This is app/(app)/(tabs)/history.tsx
         options={{
           title: 'History',
-          headerShown: false,
-          tabBarIcon: ({ color }) => <Ionicons name="receipt-outline" size={28} color={color} />,
-          href: isAdmin ? null : '/(app)/(tabs)/history',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'time' : 'time-outline'}
+              size={24}
+              color={color}
+            />
+          ),
+          href: isAdmin ? null : '/(app)/(tabs)/history', // Only show for Agent
         }}
       />
 
-      {/* This is now the 'agents.tsx' file.
-        Title is "Agents". Hidden for non-Admins.
-      */}
+      {/* --- COMMON: Profile Tab --- */}
       <Tabs.Screen
-        name="agents" // <-- CHANGED
+        name="profile" // This is app/(app)/(tabs)/profile.tsx
         options={{
-          title: 'Agents', // <-- CHANGED
-          headerShown: false,
-          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={28} color={color} />,
-          href: isAdmin ? '/(app)/(tabs)/agents' : null,
+          title: 'Profile',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'person' : 'person-outline'}
+              size={24}
+              color={color}
+            />
+          ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

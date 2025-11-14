@@ -1,41 +1,67 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+// 1. Define our app's core brand colors
+const brandPrimary = '#4A00E0'; // The main purple
+const brandLight = '#78D1E8';  // The light blue icon color
 
-export const Colors = {
-  light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
-  },
-  dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
-  },
+// 2. Define colors for Light Mode
+const tintColorLight = brandPrimary;
+const light = {
+  text: '#000',
+  textSecondary: '#666',
+  background: '#FFFFFF', // Pure white page background
+  tint: tintColorLight,
+  tabIconDefault: '#ccc',
+  tabIconSelected: tintColorLight,
+  tabBar: '#FFFFFF', // White tab bar
+  card: '#f9f9f9', // Light grey for list items
+  input: '#f0f0f0', // Light grey for inputs
+  formBackground: '#f0f0f0', // Light grey for form pages
+  header: '#FFFFFF', // White header
+  borderColor: '#e0e0e0',
+  buttonDefault: '#f0f0f0',
+  buttonDefaultText: tintColorLight,
+  buttonPrimary: tintColorLight,
+  buttonPrimaryText: '#FFFFFF',
+  danger: '#D9534F',
+  icon: brandLight,
 };
 
+// 3. Define colors for Dark Mode
+const tintColorDark = '#FFFFFF';
+const dark = {
+  text: '#FFFFFF',
+  textSecondary: '#999',
+  background: '#121212', // Dark background
+  tint: tintColorDark,
+  tabIconDefault: '#777',
+  tabIconSelected: tintColorDark,
+  tabBar: '#1A1A1A', // Dark tab bar
+  card: '#272727', // Dark grey for list items
+  input: '#333333', // Darker grey for inputs
+  formBackground: '#121212', // Dark background for form pages
+  header: '#1A1A1A', // Dark header
+  borderColor: '#444444',
+  buttonDefault: '#333333',
+  buttonDefaultText: '#FFFFFF',
+  buttonPrimary: '#FFFFFF',
+  buttonPrimaryText: '#121212',
+  danger: '#E57373',
+  icon: brandLight,
+};
+
+// 4. Export the final Colors object
+export const Colors = {
+  light: light,
+  dark: dark,
+};
+
+// 5. Export Fonts (if it's not already in a separate file)
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {

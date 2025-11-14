@@ -8,12 +8,13 @@ import {
   StyleSheet,
   Text,
   View,
+  useColorScheme, // <-- Import for theme
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomHeader from '../../../components/CustomHeader';
 import SearchBar from '../../../components/SearchBar';
+import { Colors } from '../../../constants/theme'; // <-- Import your new theme
 import { supabase } from '../../../lib/supabase';
-// --- AddAgentModal is no longer needed ---
 
 // (Agent type is unchanged)
 type Agent = {
@@ -27,12 +28,18 @@ type Agent = {
 
 export default function AgentsScreen() {
   const router = useRouter();
+
+  // --- NEW: Get theme and colors ---
+  const colorScheme = useColorScheme() ?? 'light';
+  const themeColors = Colors[colorScheme];
+  // ---
+
+  // (State is unchanged)
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // --- No more modal state needed ---
 
+  // (All data functions are unchanged)
   const fetchAgents = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -54,38 +61,100 @@ export default function AgentsScreen() {
       fetchAgents();
     }, [])
   );
-  
-  // (onAgentAdded is no longer needed, fetch is handled by useFocusEffect)
 
-  // (filteredAgents is unchanged)
   const filteredAgents = useMemo(() => {
-    return agents.filter(agent =>
+    return agents.filter((agent) =>
       agent.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [agents, searchQuery]);
-  
-  // (handleViewAgent is unchanged)
+
   const handleViewAgent = (agent: Agent) => {
     router.push({
-      pathname: '/agent_profile', 
-      params: { agentId: agent.id }
+      pathname: '/agent_profile',
+      params: { agentId: agent.id },
     });
   };
 
-  // (renderAgentItem is unchanged)
+  // --- NEW: Dynamic styles ---
+  // We move styles inside the component to access themeColors
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: themeColors.background, // Dynamic
+    },
+    itemContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: themeColors.card, // Dynamic
+      borderRadius: 10,
+      padding: 10,
+      marginHorizontal: 15,
+      marginVertical: 5,
+      elevation: 1,
+    },
+    itemIcon: {
+      marginRight: 10,
+    },
+    itemMiddle: {
+      flex: 1,
+    },
+    itemName: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: themeColors.text, // Dynamic
+    },
+    itemSubtitle: {
+      fontSize: 14,
+      color: themeColors.textSecondary, // Dynamic
+    },
+    viewButton: {
+      backgroundColor: themeColors.tint, // Dynamic
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+    },
+    viewButtonText: {
+      color: themeColors.buttonPrimaryText, // Dynamic
+      fontWeight: 'bold',
+      fontSize: 14,
+    },
+    emptyText: {
+      textAlign: 'center',
+      marginTop: 30,
+      fontSize: 16,
+      color: themeColors.textSecondary, // Dynamic
+    },
+    fab: {
+      position: 'absolute',
+      right: 25,
+      bottom: 25,
+      backgroundColor: themeColors.tint, // Dynamic
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 8,
+    },
+  });
+  // --- END NEW STYLES ---
+
   const renderAgentItem = ({ item }: { item: Agent }) => (
     <View style={styles.itemContainer}>
       <View style={styles.itemIcon}>
-        <Ionicons name="person-circle" size={40} color="#78D1E8" />
+        <Ionicons
+          name="person-circle"
+          size={40}
+          color={themeColors.icon} // Dynamic
+        />
       </View>
       <View style={styles.itemMiddle}>
         <Text style={styles.itemName}>{item.username}</Text>
         <Text style={styles.itemSubtitle}>{item.mobile_no || 'No mobile'}</Text>
       </View>
-      <Pressable 
-        style={styles.viewButton} 
-        onPress={() => handleViewAgent(item)}
-      >
+      <Pressable
+        style={styles.viewButton}
+        onPress={() => handleViewAgent(item)}>
         <Text style={styles.viewButtonText}>View</Text>
       </Pressable>
     </View>
@@ -102,43 +171,31 @@ export default function AgentsScreen() {
       />
 
       {loading ? (
-        <ActivityIndicator size="large" style={{ marginTop: 50 }} />
+        <ActivityIndicator
+          size="large"
+          style={{ marginTop: 50 }}
+          color={themeColors.tint} // Dynamic
+        />
       ) : (
         <FlatList
           data={filteredAgents}
           renderItem={renderAgentItem}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           ListEmptyComponent={
             <Text style={styles.emptyText}>No agents found.</Text>
           }
+          style={{ backgroundColor: themeColors.background }} // Dynamic
         />
       )}
-      
-      {/* --- FAB to add agent --- */}
-      <Pressable 
-        style={styles.fab} 
-        // --- THIS IS THE CHANGE ---
-        onPress={() => router.push('/add_agent')}
-      >
-        <Ionicons name="add" size={30} color="white" />
-      </Pressable>
-      
-      {/* --- The Modal is removed --- */}
 
+      {/* --- FAB to add agent --- */}
+      <Pressable style={styles.fab} onPress={() => router.push('/add_agent')}>
+        <Ionicons
+          name="add"
+          size={30}
+          color={themeColors.buttonPrimaryText} // Dynamic
+        />
+      </Pressable>
     </SafeAreaView>
   );
 }
-
-// (Styles are unchanged)
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  itemContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 10, padding: 10, marginHorizontal: 15, marginVertical: 5, elevation: 2 },
-  itemIcon: { marginRight: 10 },
-  itemMiddle: { flex: 1 },
-  itemName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  itemSubtitle: { fontSize: 14, color: '#666' },
-  viewButton: { backgroundColor: '#4A00E0', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
-  viewButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
-  emptyText: { textAlign: 'center', marginTop: 30, fontSize: 16, color: '#888' },
-  fab: { position: 'absolute', right: 25, bottom: 25, backgroundColor: '#4A00E0', width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 8 },
-});
