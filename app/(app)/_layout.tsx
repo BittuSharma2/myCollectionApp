@@ -21,6 +21,7 @@ export default function AppStackLayout() {
       <Stack.Screen name="add_agent" options={{ headerShown: false }} />
       <Stack.Screen name="edit_agent" options={{ headerShown: false }} />
       <Stack.Screen name="edit_customer" options={{ headerShown: false }} />
+      <Stack.Screen name="agent_day_history" options={{ headerShown: false }} />
       
       {/* This is your "Change Password" modal */}
       <Stack.Screen 

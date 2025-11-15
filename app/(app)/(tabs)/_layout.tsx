@@ -1,125 +1,94 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  useColorScheme,
-  View,
-} from 'react-native';
-import { Colors } from '../../../constants/theme'; // <-- Import our new Colors
+import React from 'react';
+import { useColorScheme } from 'react-native';
+
+import { Colors } from '../../../constants/theme';
 import { useAuth } from '../../../context/AuthContext';
 
 export default function TabLayout() {
-  const { profile, loading } = useAuth(); // Get profile
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
+  
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
-
-  // Wait for profile to load before deciding which tabs to show
-  if (loading || !profile) {
-    return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: themeColors.background },
-        ]}>
-        <ActivityIndicator size="large" color={themeColors.tint} />
-      </View>
-    );
-  }
-
-  const isAdmin = profile?.role === 'admin';
 
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
-        // --- NEW: Theme styles ---
         tabBarActiveTintColor: themeColors.tint,
-        tabBarInactiveTintColor: themeColors.tabIconDefault,
+        tabBarInactiveTintColor: themeColors.textSecondary,
         tabBarStyle: {
-          backgroundColor: themeColors.tabBar,
+          backgroundColor: themeColors.header,
           borderTopColor: themeColors.borderColor,
         },
+        headerShown: false,
       }}>
       
-      {/* --- THE FIX ---
-          This is your 'customers.tsx' file.
-          It is the main tab for BOTH roles.
-      --- */}
+      {/* 1. SHARED: Customer List */}
       <Tabs.Screen
-        name="customers" 
+        name="customers"
         options={{
-          title: isAdmin ? 'Customers' : 'Home', // Dynamic title
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              // Dynamic icon
-              name={
-                isAdmin
-                  ? focused ? 'people' : 'people-outline'
-                  : focused ? 'home' : 'home-outline'
-              }
-              size={24}
-              color={color}
-            />
-          ),
-          // This tab is always shown, so href is not needed
+          title: 'Customers',
+          tabBarIcon: ({ color }) => <Ionicons name="people" size={26} color={color} />,
         }}
       />
       
-      {/* --- ADMIN: Agents Tab --- */}
+      {/* 2. ADMIN: Agent Management */}
       <Tabs.Screen
-        name="agents" // This is app/(app)/(tabs)/agents.tsx
+        name="agents"
         options={{
           title: 'Agents',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'briefcase' : 'briefcase-outline'}
-              size={24}
-              color={color}
-            />
-          ),
-          href: isAdmin ? '/(app)/(tabs)/agents' : null, // Only show for Admin
+          tabBarIcon: ({ color }) => <Ionicons name="briefcase" size={26} color={color} />,
+          // @ts-ignore - This is the correct fix for the Expo Router type bug.
+          href: isAdmin ? 'agents' : null,
         }}
       />
-
-      {/* --- AGENT: History Tab --- */}
+      
+      {/* 3. ADMIN: Collection History */}
       <Tabs.Screen
-        name="history" // This is app/(app)/(tabs)/history.tsx
+        name="history"
         options={{
-          title: 'History',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'time' : 'time-outline'}
-              size={24}
-              color={color}
-            />
-          ),
-          href: isAdmin ? null : '/(app)/(tabs)/history', // Only show for Agent
+          title: 'Collections', // Renamed for clarity
+          tabBarIcon: ({ color }) => <Ionicons name="stats-chart" size={26} color={color} />,
+          // @ts-ignore
+          href: isAdmin ? 'history' : null,
         }}
       />
-
-      {/* --- COMMON: Profile Tab --- */}
+      
+      {/* --- NEW TAB FOR ADMIN --- */}
       <Tabs.Screen
-        name="profile" // This is app/(app)/(tabs)/profile.tsx
+        name="debit_history"
+        options={{
+          title: 'Debits',
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="remove-circle" size={26} color={color} />
+          ),
+          // @ts-ignore
+          href: isAdmin ? 'debit_history' : null,
+        }}
+      />
+      
+      {/* 4. AGENT: My Collections */}
+      <Tabs.Screen
+        name="my_collections"
+        options={{
+          title: 'History', // Agent just sees "History"
+          tabBarIcon: ({ color }) => <Ionicons name="stats-chart" size={26} color={color} />,
+          // @ts-ignore
+          href: isAdmin ? null : 'my_collections',
+        }}
+      />
+      
+      {/* 5. SHARED: Profile Screen */}
+      <Tabs.Screen
+        name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'person' : 'person-outline'}
-              size={24}
-              color={color}
-            />
-          ),
+          tabBarIcon: ({ color }) => <Ionicons name="person" size={26} color={color} />,
         }}
       />
+      
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});

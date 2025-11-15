@@ -20,8 +20,6 @@ export {
   ErrorBoundary
 } from 'expo-router';
 
-// We have REMOVED the 'unstable_settings' block
-
 SplashScreen.preventAutoHideAsync();
 
 const AppLightTheme = {
@@ -88,25 +86,18 @@ function AuthProtectedLayout({ loaded }: { loaded: boolean }) {
   useEffect(() => {
     if (loading || !loaded) return;
 
-    // --- (THE FIX) ---
-    // Check if user is in the '(app)' group
     const inAuthGroup = segments[0] === '(app)';
 
     if (!session && inAuthGroup) {
-      // User is not logged in and is trying to access app, send to login
       router.replace('/login' as any);
     } 
     else if (session && profile && !inAuthGroup) {
-      // User is logged in but on the login page, send them into the app
-      if (profile.role === 'admin') {
-        router.replace('/(app)/(tabs)/customers' as any);
-      } else {
-        // This is the correct path for Agents (if you create home.tsx)
-        // If you don't have home.tsx, change this to '/(app)/(tabs)/customers'
-        router.replace('/(app)/(tabs)/customers' as any);
-      }
+      // --- (THE FIX) ---
+      // Both Admin and Agent will now be redirected to 'customers'
+      // since 'home.tsx' does not exist.
+      router.replace('/(app)/(tabs)/customers' as any);
+      // --- (END FIX) ---
     }
-    // --- (END FIX) ---
   }, [session, loading, loaded, segments, profile]);
 
   if (loading || !loaded || (session && !profile)) {
@@ -117,9 +108,6 @@ function AuthProtectedLayout({ loaded }: { loaded: boolean }) {
     );
   }
 
-  // --- (THE FIX) ---
-  // This Stack layout ONLY knows about (app) and login.
-  // This is correct because (app) and login are its only children.
   return (
     <Stack>
       <Stack.Screen name="(app)" options={{ headerShown: false }} />
