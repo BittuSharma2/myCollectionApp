@@ -2,19 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Pressable,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomHeader from '../../../components/CustomHeader';
 import { Colors } from '../../../constants/theme';
 import { useAuth } from '../../../context/AuthContext';
 
-// --- Theme-aware DetailRow Component ---
+// (DetailRow component is unchanged)
 const DetailRow = ({
   label,
   value,
@@ -63,10 +63,7 @@ export default function ProfileScreen() {
     );
   }
 
-  // --- (THE FIX) ---
-  // Check if the user is an admin
   const isAdmin = profile.role === 'admin';
-  // --- (END FIX) ---
 
   return (
     <SafeAreaView
@@ -100,6 +97,16 @@ export default function ProfileScreen() {
           value={profile.address}
           themeColors={themeColors}
         />
+        
+        {/* --- THIS IS THE NEW LINE --- */}
+        {/* It will show for both Admin and Agent */}
+        <DetailRow
+          label="Aadhar No"
+          value={profile.aadhar_card_no}
+          themeColors={themeColors}
+        />
+        {/* --- END OF NEW LINE --- */}
+
         <DetailRow
           label="Email"
           value={profile.email}
@@ -108,15 +115,14 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.buttonContainer}>
-        {/* --- (THE FIX) --- */}
-        {/* Only show the "Change Password" button if the user is an Admin */}
+        {/* Only show "Change Password" to Admins */}
         {isAdmin && (
           <Pressable
             style={[
               styles.button,
               { backgroundColor: themeColors.buttonDefault },
             ]}
-            onPress={() => router.push('/modal')}>
+            onPress={() => router.push('/(app)/modal' as any)}>
             <Ionicons
               name="lock-closed-outline"
               size={20}
@@ -131,7 +137,6 @@ export default function ProfileScreen() {
             </Text>
           </Pressable>
         )}
-        {/* --- (END FIX) --- */}
 
         <Pressable
           style={[styles.button, { backgroundColor: themeColors.danger }]}

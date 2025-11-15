@@ -48,6 +48,7 @@ export default function MyCollectionsScreen() {
       .from('transactions')
       .select('id, amount, customers ( name )')
       .eq('user_id', profile.id) // Filter by the logged-in agent
+      .gt('amount', 0) // Only collections
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString())
       .order('created_at', { ascending: false })
@@ -122,23 +123,42 @@ export default function MyCollectionsScreen() {
       color: themeColors.buttonPrimaryText,
       marginTop: 5,
     },
+    // --- NEW CARD STYLES ---
     itemContainer: {
+      backgroundColor: themeColors.card,
       flexDirection: 'row',
       justifyContent: 'space-between',
-      padding: 20,
+      alignItems: 'center',
+      padding: 16,
       marginHorizontal: 15,
-      borderBottomWidth: 1,
-      borderBottomColor: themeColors.borderColor,
+      marginVertical: 6, // Gap
+      borderRadius: 12, // Rounded
+      elevation: 2,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      minHeight: 70,
+    },
+    itemLeft: {
+      flex: 1,
+      marginRight: 10,
     },
     itemName: {
       fontSize: 16,
+      fontWeight: '600',
       color: themeColors.text,
+    },
+    itemRight: {
+      minWidth: 90,
+      alignItems: 'flex-end',
     },
     itemAmount: {
       fontSize: 16,
       fontWeight: 'bold',
-      color: themeColors.text,
+      color: 'green', // Collection is green
     },
+    // ---
     emptyText: {
       textAlign: 'center',
       marginTop: 30,
@@ -147,13 +167,23 @@ export default function MyCollectionsScreen() {
     },
   });
 
+  // --- UPDATED renderItem ---
   const renderItem = ({ item }: { item: DailyCollection }) => (
-    <View style={styles.itemContainer}>
-      <Text style={styles.itemName}>
-        {item.customers?.name || 'Unknown Customer'}
-      </Text>
-      <Text style={styles.itemAmount}>{item.amount.toFixed(1)}</Text>
-    </View>
+    <Pressable
+      style={({ pressed }) => [
+        styles.itemContainer,
+        pressed && { backgroundColor: themeColors.input }, // Visual feedback on press
+      ]}
+    >
+      <View style={styles.itemLeft}>
+        <Text style={styles.itemName} numberOfLines={1}>
+          {item.customers?.name || 'Unknown Customer'}
+        </Text>
+      </View>
+      <View style={styles.itemRight}>
+        <Text style={styles.itemAmount}>₹{item.amount.toFixed(1)}</Text>
+      </View>
+    </Pressable>
   );
 
   return (

@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    FlatList, // Changed from SectionList
+    FlatList,
     Pressable,
     StyleSheet,
     Text,
@@ -16,26 +16,22 @@ import CustomHeader from '../../../components/CustomHeader';
 import { Colors } from '../../../constants/theme';
 import { supabase } from '../../../lib/supabase';
 
-// Types for our new data
 type AgentSummary = {
   user_id: string;
   username: string;
   total_collection: number;
 };
 
-// This is the ADMIN's history screen
 export default function HistoryScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
-  const router = useRouter(); // Import router for navigation
+  const router = useRouter();
 
   const [summary, setSummary] = useState<AgentSummary[]>([]);
-  // We no longer need the 'fullLog' state here
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Formats date to 'YYYY-MM-DD' for SQL
   const getSqlDate = (date: Date) => {
     return date.toISOString().split('T')[0];
   };
@@ -44,19 +40,15 @@ export default function HistoryScreen() {
     setLoading(true);
     const selectedDate = getSqlDate(date);
 
-    // 1. Fetch Agent Summary using our SQL function
     const { data: summaryData, error: summaryError } = await supabase.rpc(
       'get_daily_summary',
       { p_date: selectedDate }
     );
     if (summaryError) {
-      console.error('Error fetching summary:', summaryError.message);
       alert('Failed to fetch agent summary.');
     } else {
       setSummary(summaryData || []);
     }
-    
-    // 2. We no longer fetch the full log here
     setLoading(false);
   };
 
@@ -79,34 +71,6 @@ export default function HistoryScreen() {
     setShowDatePicker(false);
     setDate(currentDate);
   };
-
-  // --- Render Function for the new FlatList ---
-  const renderSummaryItem = ({ item }: { item: AgentSummary }) => (
-    <Pressable
-      style={styles.itemContainer}
-      onPress={() =>
-        router.push({
-          pathname: '/(app)/agent_day_history' as any,
-          params: {
-            agentId: item.user_id,
-            agentName: item.username,
-            date: getSqlDate(date), // Pass the selected date
-          },
-        })
-      }>
-      <Text style={styles.itemName}>{item.username}</Text>
-      <View style={styles.itemRight}>
-        <Text style={styles.itemAmount}>
-          ₹ {item.total_collection.toFixed(1)}
-        </Text>
-        <Ionicons
-          name="chevron-forward"
-          size={20}
-          color={themeColors.textSecondary}
-        />
-      </View>
-    </Pressable>
-  );
 
   // --- Styles ---
   const styles = StyleSheet.create({
@@ -138,31 +102,43 @@ export default function HistoryScreen() {
       fontSize: 18,
       fontWeight: 'bold',
       color: themeColors.text,
-      paddingHorizontal: 15,
+      paddingHorizontal: 20,
       marginTop: 10,
       marginBottom: 5,
     },
+    // --- NEW CARD STYLES ---
     itemContainer: {
+      backgroundColor: themeColors.card,
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: 15,
+      padding: 16,
       marginHorizontal: 15,
-      borderBottomWidth: 1,
-      borderBottomColor: themeColors.borderColor,
-      backgroundColor: themeColors.card,
+      marginVertical: 6, // Gap
+      borderRadius: 12, // Rounded
+      elevation: 2,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      minHeight: 70,
     },
+    itemLeft: {
+      flex: 1,
+      marginRight: 10,
+    },
+    itemName: { fontSize: 16, fontWeight: '600', color: themeColors.text },
     itemRight: {
       flexDirection: 'row',
       alignItems: 'center',
     },
-    itemName: { fontSize: 16, color: themeColors.text },
     itemAmount: {
       fontSize: 16,
       fontWeight: 'bold',
       color: themeColors.text,
       marginRight: 10,
     },
+    // ---
     emptyText: {
       textAlign: 'center',
       marginTop: 30,
@@ -170,6 +146,39 @@ export default function HistoryScreen() {
       color: themeColors.textSecondary,
     },
   });
+
+  // --- UPDATED renderSummaryItem ---
+  const renderSummaryItem = ({ item }: { item: AgentSummary }) => (
+    <Pressable
+      style={({ pressed }) => [
+        styles.itemContainer,
+        pressed && { backgroundColor: themeColors.input },
+      ]}
+      onPress={() =>
+        router.push({
+          pathname: '/(app)/agent_day_history' as any,
+          params: {
+            agentId: item.user_id,
+            agentName: item.username,
+            date: getSqlDate(date),
+          },
+        })
+      }>
+      <View style={styles.itemLeft}>
+        <Text style={styles.itemName}>{item.username}</Text>
+      </View>
+      <View style={styles.itemRight}>
+        <Text style={styles.itemAmount}>
+          ₹ {item.total_collection.toFixed(1)}
+        </Text>
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={themeColors.textSecondary}
+        />
+      </View>
+    </Pressable>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
