@@ -9,46 +9,36 @@ import {
   StyleSheet,
   Text,
   View,
-  useColorScheme, // <-- Import for theme
+  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../context/AuthContext';
 import { supabase } from '../../../lib/supabase';
 
 import AddCollectionModal from '../../../components/AddCollectionModal';
+import AddDebitModal from '../../../components/AddDebitModal'; // <-- Import new modal
 import CustomHeader from '../../../components/CustomHeader';
 import SearchBar from '../../../components/SearchBar';
-import { Colors } from '../../../constants/theme'; // <-- Import your new theme
+import { Colors } from '../../../constants/theme';
 
 // (Types are unchanged)
-type Agent = {
-  id: string;
-  username: string;
-};
+type Agent = { id: string; username: string };
 type Customer = {
   id: number;
   name: string;
   shop_name: string;
   agent_id: string | null;
   initial_amount: number;
-  profiles: {
-    username: string;
-  } | null;
+  profiles: { username: string } | null;
 };
-type SimplifiedCustomer = {
-  id: number;
-  name: string;
-};
+type SimplifiedCustomer = { id: number; name: string };
 
 export default function CustomersScreen() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const router = useRouter();
-
-  // --- NEW: Get theme and colors ---
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
-  // ---
 
   // (State is unchanged)
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -56,11 +46,15 @@ export default function CustomersScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [optionsVisibleFor, setOptionsVisibleFor] = useState<number | null>(null);
-  const [isCollectionModalVisible, setIsCollectionModalVisible] = useState(false);
+  const [isCollectionModalVisible, setIsCollectionModalVisible] =
+    useState(false);
   const [selectedCustomer, setSelectedCustomer] =
     useState<SimplifiedCustomer | null>(null);
   const [agentsList, setAgentsList] = useState<Agent[]>([]);
   const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>('all');
+
+  // --- NEW: State for Debit Modal ---
+  const [isDebitModalVisible, setIsDebitModalVisible] = useState(false);
 
   // (All data functions are unchanged)
   const fetchAgentsForFilter = async () => {
@@ -140,70 +134,73 @@ export default function CustomersScreen() {
       fetchCustomers();
     }, [profile, selectedAgentFilter, searchQuery])
   );
+  
+  const handleStatePress = (customer: Customer) => {
+    router.push({
+      pathname: '/(app)/customer_profile' as any,
+      params: { customerId: customer.id },
+    });
+    setOptionsVisibleFor(null);
+  };
+  
+  const handleViewPress = (customer: Customer) => {
+    router.push({
+      pathname: '/(app)/customer_profile' as any,
+      params: { customerId: customer.id },
+    });
+    setOptionsVisibleFor(null);
+  };
 
+  // (Updated/New Handlers)
   const handleCollectPress = (customer: Customer) => {
     setSelectedCustomer({ id: customer.id, name: customer.name });
     setIsCollectionModalVisible(true);
     setOptionsVisibleFor(null);
   };
-  const handleStatePress = (customer: Customer) => {
-    router.push({
-      pathname: '/customer_profile' as any,
-      params: { customerId: customer.id },
-    });
-    setOptionsVisibleFor(null);
-  };
-  const handleViewPress = (customer: Customer) => {
-    router.push({
-      pathname: '/customer_profile' as any,
-      params: { customerId: customer.id },
-    });
-    setOptionsVisibleFor(null);
-  };
-
   const onCollectionSuccess = () => {
     setIsCollectionModalVisible(false);
     setSelectedCustomer(null);
     fetchCustomers();
   };
 
-  // --- NEW: Dynamic styles ---
-  // We move styles inside the component to access themeColors
+  // --- NEW: Debit Handlers ---
+  const handleDebitPress = (customer: Customer) => {
+    setSelectedCustomer({ id: customer.id, name: customer.name });
+    setIsDebitModalVisible(true);
+    setOptionsVisibleFor(null);
+  };
+  const onDebitSuccess = () => {
+    setIsDebitModalVisible(false);
+    setSelectedCustomer(null);
+    fetchCustomers(); // Also refresh list on debit
+  };
+
+  // (Styles are unchanged, defined inside component)
   const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: themeColors.background, // Dynamic
-    },
+    container: { flex: 1, backgroundColor: themeColors.background },
     filterContainer: {
       paddingHorizontal: 15,
       paddingTop: 10,
-      backgroundColor: themeColors.background, // Dynamic
+      backgroundColor: themeColors.background,
     },
-    filterLabel: {
-      fontSize: 14,
-      color: themeColors.textSecondary, // Dynamic
-    },
+    filterLabel: { fontSize: 14, color: themeColors.textSecondary },
     pickerContainer: {
       borderWidth: 1,
-      borderColor: themeColors.borderColor, // Dynamic
+      borderColor: themeColors.borderColor,
       borderRadius: 8,
       marginTop: 5,
-      backgroundColor: themeColors.card, // Dynamic
+      backgroundColor: themeColors.card,
     },
-    picker: {
-      width: '100%',
-      height: 50,
-      color: themeColors.text, // Dynamic
-    },
+    picker: { width: '100%', height: 50, color: themeColors.text },
     emptyText: {
       textAlign: 'center',
       marginTop: 30,
       fontSize: 16,
-      color: themeColors.textSecondary, // Dynamic
+      color: themeColors.textSecondary,
     },
     itemContainer: {
       flexDirection: 'row',
-      backgroundColor: themeColors.card, // Dynamic
+      backgroundColor: themeColors.card,
       borderRadius: 10,
       padding: 15,
       marginHorizontal: 15,
@@ -211,23 +208,12 @@ export default function CustomersScreen() {
       elevation: 1,
       minHeight: 70,
     },
-    itemMiddle: {
-      flex: 1,
-      justifyContent: 'center',
-      paddingHorizontal: 10,
-    },
-    itemName: {
-      fontSize: 16,
-      fontWeight: 'bold',
-      color: themeColors.text, // Dynamic
-    },
-    itemSubtitle: {
-      fontSize: 14,
-      color: themeColors.textSecondary, // Dynamic
-    },
+    itemMiddle: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
+    itemName: { fontSize: 16, fontWeight: 'bold', color: themeColors.text },
+    itemSubtitle: { fontSize: 14, color: themeColors.textSecondary },
     itemAgent: {
       fontSize: 13,
-      color: themeColors.tint, // Dynamic
+      color: themeColors.tint,
       fontStyle: 'italic',
       marginTop: 2,
     },
@@ -237,41 +223,19 @@ export default function CustomersScreen() {
       alignItems: 'center',
       minWidth: 90,
     },
-    actionButton: {
-      marginLeft: 15,
-      alignItems: 'center',
-    },
-    actionText: {
-      fontSize: 12,
-      color: themeColors.textSecondary, // Dynamic
-      marginTop: 2,
-    },
-    viewButton: {
-      backgroundColor: themeColors.tint, // Dynamic
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-      borderRadius: 20,
-    },
-    viewButtonText: {
-      color: themeColors.buttonPrimaryText, // Dynamic
-      fontWeight: 'bold',
-      fontSize: 14,
-    },
+    actionButton: { marginHorizontal: 10, alignItems: 'center' }, // Adjusted margin
+    actionText: { fontSize: 12, color: themeColors.textSecondary, marginTop: 2 },
     balanceContainer: {
       justifyContent: 'center',
       alignItems: 'flex-end',
       minWidth: 90,
     },
-    balanceText: {
-      fontSize: 16,
-      fontWeight: 'bold',
-      color: themeColors.text, // Dynamic
-    },
+    balanceText: { fontSize: 16, fontWeight: 'bold', color: themeColors.text },
     fab: {
       position: 'absolute',
       right: 25,
       bottom: 25,
-      backgroundColor: themeColors.tint, // Dynamic
+      backgroundColor: themeColors.tint,
       width: 60,
       height: 60,
       borderRadius: 30,
@@ -280,7 +244,6 @@ export default function CustomersScreen() {
       elevation: 8,
     },
   });
-  // --- END NEW STYLES ---
 
   const renderCustomerItem = ({ item }: { item: Customer }) => {
     const isSelected = optionsVisibleFor === item.id;
@@ -300,12 +263,36 @@ export default function CustomersScreen() {
         <View style={styles.itemActions}>
           {isSelected ? (
             isAdmin ? (
-              <Pressable
-                style={styles.viewButton}
-                onPress={() => handleViewPress(item)}>
-                <Text style={styles.viewButtonText}>View</Text>
-              </Pressable>
+              // --- ADMIN BUTTONS (Updated) ---
+              <>
+                <Pressable
+                  style={styles.actionButton}
+                  onPress={() => handleDebitPress(item)}>
+                  <Ionicons
+                    name="remove-circle-outline"
+                    size={24}
+                    color={themeColors.danger}
+                  />
+                  <Text style={[styles.actionText, { color: themeColors.danger }]}>
+                    Debit...
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={styles.actionButton}
+                  onPress={() => handleViewPress(item)}>
+                  <Ionicons
+                    name="document-text-outline"
+                    size={24}
+                    color={themeColors.tint}
+                  />
+                  <Text
+                    style={[styles.actionText, { color: themeColors.tint }]}>
+                    View...
+                  </Text>
+                </Pressable>
+              </>
             ) : (
+              // --- AGENT BUTTONS (Unchanged) ---
               <>
                 <Pressable
                   style={styles.actionButton}
@@ -313,7 +300,7 @@ export default function CustomersScreen() {
                   <Ionicons
                     name="add-circle-outline"
                     size={24}
-                    color={themeColors.tint} // Dynamic
+                    color={themeColors.tint}
                   />
                   <Text style={styles.actionText}>Collect...</Text>
                 </Pressable>
@@ -323,7 +310,7 @@ export default function CustomersScreen() {
                   <Ionicons
                     name="document-text-outline"
                     size={24}
-                    color="#34C759" // Kept green for status
+                    color="#34C759"
                   />
                   <Text style={styles.actionText}>State...</Text>
                 </Pressable>
@@ -345,11 +332,15 @@ export default function CustomersScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <CustomHeader title={isAdmin ? 'Customers' : 'My Customers'} />
 
+      {/* --- (THE FIX) ---
+          The full props are now provided to SearchBar, fixing the error.
+      --- */}
       <SearchBar
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         placeholder="Search by Customer Name"
       />
+      {/* --- (END FIX) --- */}
 
       {isAdmin && (
         <View style={styles.filterContainer}>
@@ -379,7 +370,7 @@ export default function CustomersScreen() {
         <ActivityIndicator
           size="large"
           style={{ marginTop: 50 }}
-          color={themeColors.tint} // Dynamic
+          color={themeColors.tint}
         />
       ) : (
         <FlatList
@@ -390,7 +381,7 @@ export default function CustomersScreen() {
             <Text style={styles.emptyText}>No customers found.</Text>
           }
           onScroll={() => setOptionsVisibleFor(null)}
-          style={{ backgroundColor: themeColors.background }} // Dynamic
+          style={{ backgroundColor: themeColors.background }}
         />
       )}
 
@@ -401,14 +392,22 @@ export default function CustomersScreen() {
         onSuccess={onCollectionSuccess}
       />
 
+      {/* --- NEW: Add the Debit Modal --- */}
+      <AddDebitModal
+        visible={isDebitModalVisible}
+        onClose={() => setIsDebitModalVisible(false)}
+        account={selectedCustomer}
+        onSuccess={onDebitSuccess}
+      />
+
       {isAdmin && (
         <Pressable
           style={styles.fab}
-          onPress={() => router.push('/add_customer')}>
+          onPress={() => router.push('/(app)/add_customer' as any)}>
           <Ionicons
             name="add"
             size={30}
-            color={themeColors.buttonPrimaryText} // Dynamic
+            color={themeColors.buttonPrimaryText}
           />
         </Pressable>
       )}

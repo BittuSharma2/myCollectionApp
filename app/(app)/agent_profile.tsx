@@ -10,10 +10,10 @@ import {
   StyleSheet,
   Text,
   View,
-  useColorScheme, // <-- Import for theme
+  useColorScheme,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/theme'; // <-- Import your new theme
+import { Colors } from '../../constants/theme';
 import { supabase } from '../../lib/supabase';
 
 // (Types are unchanged)
@@ -52,18 +52,14 @@ export default function AgentProfileScreen() {
   const insets = useSafeAreaInsets();
   const { agentId } = useLocalSearchParams<{ agentId: string }>();
 
-  // --- NEW: Get theme and colors ---
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
-  // ---
 
-  // (State is unchanged)
   const [agent, setAgent] = useState<Agent | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isProfileVisible, setIsProfileVisible] = useState(true); // Show profile by default
+  const [isProfileVisible, setIsProfileVisible] = useState(true);
 
-  // (All data functions are unchanged)
   const fetchData = async () => {
     if (!agentId) return;
     setLoading(true);
@@ -101,7 +97,7 @@ export default function AgentProfileScreen() {
   const handleDeleteAgent = () => {
     Alert.alert(
       'Delete Agent',
-      `Are you sure you want to delete ${agent?.username}?`,
+      `Are you sure you want to delete ${agent?.username}? This will un-assign all their customers and cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: deleteProfile },
@@ -109,19 +105,37 @@ export default function AgentProfileScreen() {
     );
   };
 
-  // (Using your simple deleteProfile function)
+  // --- (THE FIX) ---
+  // This function now correctly deletes the agent's auth account
   const deleteProfile = async () => {
     if (!agent) return;
-    const { error } = await supabase.from('profiles').delete().eq('id', agent.id);
-    if (error) {
-      Alert.alert('Error', 'Failed to delete agent profile.');
+
+    // 1. Un-assign all customers from this agent
+    const { error: updateError } = await supabase
+      .from('customers')
+      .update({ agent_id: null }) // Set agent_id to null
+      .eq('agent_id', agent.id);
+
+    if (updateError) {
+      Alert.alert('Error', 'Failed to un-assign customers. Please try again.');
+      return;
+    }
+
+    // 2. Call the Edge Function to delete the auth user
+    const { error: funcError } = await supabase.functions.invoke(
+      'delete-user',
+      { body: { user_id: agent.id } }
+    );
+
+    if (funcError) {
+      Alert.alert('Error', `Failed to delete agent: ${funcError.message}`);
     } else {
-      Alert.alert('Success', 'Agent profile deleted.');
+      Alert.alert('Success', 'Agent deleted and customers un-assigned.');
       router.back();
     }
   };
+  // --- (END FIX) ---
 
-  // (renderCustomerItem is unchanged)
   const renderCustomerItem = ({ item }: { item: Customer }) => (
     <View
       style={[
@@ -141,7 +155,7 @@ export default function AgentProfileScreen() {
         style={[styles.viewButton, { backgroundColor: themeColors.buttonDefault }]}
         onPress={() =>
           router.push({
-            pathname: '/customer_profile',
+            pathname: '/(app)/customer_profile' as any, // Use full path
             params: { customerId: item.id },
           })
         }>
@@ -245,40 +259,39 @@ export default function AgentProfileScreen() {
                 <Pressable
                   style={[
                     styles.button,
-                    { backgroundColor: themeColors.buttonPrimary }, // Dynamic
+                    { backgroundColor: themeColors.buttonPrimary },
                   ]}
                   onPress={() =>
                     router.push({
-                      pathname: '/edit_agent',
+                      pathname: '/(app)/edit_agent' as any, // Use full path
                       params: { agentId: agent.id },
                     })
                   }>
                   <Ionicons
                     name="pencil"
                     size={20}
-                    color={themeColors.buttonPrimaryText} // Dynamic
+                    color={themeColors.buttonPrimaryText}
                   />
                   <Text
                     style={[
                       styles.buttonText,
-                      { color: themeColors.buttonPrimaryText }, // Dynamic
+                      { color: themeColors.buttonPrimaryText },
                     ]}>
                     Edit Details
                   </Text>
                 </Pressable>
-
                 <Pressable
-                  style={[styles.button, { backgroundColor: themeColors.danger }]} // Dynamic
+                  style={[styles.button, { backgroundColor: themeColors.danger }]}
                   onPress={handleDeleteAgent}>
                   <Ionicons
                     name="trash"
                     size={20}
-                    color={themeColors.buttonPrimaryText} // Dynamic
+                    color={themeColors.buttonPrimaryText}
                   />
                   <Text
                     style={[
                       styles.buttonText,
-                      { color: themeColors.buttonPrimaryText }, // Dynamic
+                      { color: themeColors.buttonPrimaryText },
                     ]}>
                     Delete Agent
                   </Text>
@@ -328,8 +341,7 @@ export default function AgentProfileScreen() {
   );
 }
 
-// --- NEW: Global styles ---
-// We move styles outside the component. Dynamic colors are applied inline.
+// (Global Styles are unchanged)
 const styles = StyleSheet.create({
   container: { flex: 1 },
   customHeader: {

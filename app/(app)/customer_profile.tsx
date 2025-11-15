@@ -10,10 +10,10 @@ import {
   StyleSheet,
   Text,
   View,
-  useColorScheme, // <-- Import for theme
+  useColorScheme,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/theme'; // <-- Import your new theme
+import { Colors } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 
@@ -52,21 +52,22 @@ const DetailRow = ({
   </View>
 );
 
-// --- Theme-aware ListHeader Component ---
+// --- UPDATED: History List Header (with Debit/Credit) ---
 const ListHeader = ({ themeColors }: { themeColors: any }) => (
   <View
     style={[
       styles.historyRow,
       styles.headerRow,
       {
-        backgroundColor: themeColors.input, // Use a light grey
+        backgroundColor: themeColors.input,
         borderBottomColor: themeColors.borderColor,
       },
     ]}>
     <Text style={[styles.cell, styles.headerText, { color: themeColors.text, flex: 0.5 }]}>Sr</Text>
     <Text style={[styles.cell, styles.headerText, { color: themeColors.text, flex: 1.2 }]}>Date</Text>
     <Text style={[styles.cell, styles.headerText, { color: themeColors.text }]}>Txn No</Text>
-    <Text style={[styles.cell, styles.headerText, { color: themeColors.text }]}>Credit</Text>
+    <Text style={[styles.cell, styles.headerText, { color: themeColors.text, textAlign: 'right' }]}>Debit</Text>
+    <Text style={[styles.cell, styles.headerText, { color: themeColors.text, textAlign: 'right' }]}>Credit</Text>
     <Text style={[styles.cell, styles.headerText, { color: themeColors.text, textAlign: 'right' }]}>Balance</Text>
   </View>
 );
@@ -77,19 +78,15 @@ export default function CustomerProfileScreen() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const { customerId } = useLocalSearchParams<{ customerId: string }>();
-
-  // --- NEW: Get theme and colors ---
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
-  // ---
 
   // (State is unchanged)
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isProfileVisible, setIsProfileVisible] = useState(false); // Hide profile by default for Agent
+  const [isProfileVisible, setIsProfileVisible] = useState(false);
 
-  // (All data functions are unchanged)
   const fetchData = async () => {
     if (!customerId) return;
     setLoading(true);
@@ -135,6 +132,7 @@ export default function CustomerProfileScreen() {
     );
   };
 
+  // (Using the simple delete function, as requested)
   const deleteCustomer = async () => {
     if (!customer) return;
     const { error } = await supabase
@@ -149,21 +147,23 @@ export default function CustomerProfileScreen() {
     }
   };
 
-  // (Data processing is unchanged)
+  // --- UPDATED: Data processing (with Debit/Credit) ---
   let runningBalance = customer?.initial_amount || 0;
   const processedData = transactions.map((item, index) => {
     runningBalance += item.amount;
+    const isDebit = item.amount < 0;
     return {
       ...item,
       sr: index + 1,
       date: new Date(item.created_at).toLocaleDateString('en-IN'),
-      credit: item.amount,
+      credit: isDebit ? 0 : item.amount,
+      debit: isDebit ? Math.abs(item.amount) : 0,
       balance: runningBalance,
     };
   });
   const totalBalance = runningBalance;
 
-  // --- UPDATED: renderItem ---
+  // --- UPDATED: renderItem (with Debit/Credit) ---
   const renderItem = ({ item }: { item: (typeof processedData)[0] }) => (
     <View
       style={[
@@ -178,8 +178,12 @@ export default function CustomerProfileScreen() {
       </Text>
       <Text style={[styles.cell, { color: themeColors.text }]}>{item.id}</Text>
       <Text
-        style={[styles.cell, { color: themeColors.text, textAlign: 'right' }]}>
-        {item.credit.toFixed(1)}
+        style={[styles.cell, { color: themeColors.danger, textAlign: 'right' }]}>
+        {item.debit > 0 ? item.debit.toFixed(1) : '-'}
+      </Text>
+      <Text
+        style={[styles.cell, { color: 'green', textAlign: 'right' }]}>
+        {item.credit > 0 ? item.credit.toFixed(1) : '-'}
       </Text>
       <Text
         style={[styles.cell, { color: themeColors.text, textAlign: 'right' }]}>
@@ -295,10 +299,13 @@ export default function CustomerProfileScreen() {
                         { backgroundColor: themeColors.buttonPrimary },
                       ]}
                       onPress={() =>
+                        // --- (THE FIX) ---
+                        // Corrected navigation path
                         router.push({
-                          pathname: '/edit_customer',
+                          pathname: '/(app)/edit_customer' as any,
                           params: { customerId: customer.id },
                         })
+                        // --- (END FIX) ---
                       }>
                       <Ionicons
                         name="pencil"
@@ -413,8 +420,7 @@ export default function CustomerProfileScreen() {
   );
 }
 
-// --- NEW: Global styles ---
-// We move styles outside the component. Dynamic colors are applied inline.
+// (Styles are unchanged)
 const styles = StyleSheet.create({
   container: { flex: 1 },
   customHeader: {
