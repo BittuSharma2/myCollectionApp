@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
-import { useRouter } from 'expo-router'; // <-- THE FIX
+// import { Picker } from '@react-native-picker/picker'; // No longer needed
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,6 +16,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AgentPickerModal from '../../components/AgentPickerModal'; // <-- Import modal
 import { Colors } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -26,7 +27,7 @@ type Agent = {
 };
 
 export default function AddCustomerScreen() {
-  const router = useRouter(); // <-- THE FIX
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const colorScheme = useColorScheme() ?? 'light';
@@ -48,7 +49,12 @@ export default function AddCustomerScreen() {
   const [address, setAddress] = useState('');
   const [initialAmount, setInitialAmount] = useState('0');
   const [agents, setAgents] = useState<Agent[]>([]);
+  
+  // --- STATE FOR MODAL ---
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [isAgentModalVisible, setIsAgentModalVisible] = useState(false);
+  const [selectedAgentName, setSelectedAgentName] = useState('None (Unassigned)');
+  
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string | null }>({});
   const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
@@ -56,16 +62,13 @@ export default function AddCustomerScreen() {
   useEffect(() => {
     const fetchAgents = async () => {
       if (profile?.role !== 'admin') return;
-      // This query will fail until we fix RLS in Step 2
       const { data, error } = await supabase.from('profiles').select('id, username').eq('role', 'user');
-      if (error) { 
-        Alert.alert('Error', 'Failed to fetch agent list. Please check database permissions.'); 
-      }
+      if (error) { Alert.alert('Error', 'Failed to fetch agent list.'); }
       else { setAgents(data || []); }
     };
     fetchAgents();
   }, [profile]);
-  
+
   const validateField = (field: string, value: string): string | null => {
     let error: string | null = null;
     switch (field) {
@@ -99,6 +102,7 @@ export default function AddCustomerScreen() {
     const error = validateField(field, value);
     setErrors((prev) => ({ ...prev, [field]: error }));
   };
+  
   const handleSubmit = async () => {
     setTouched({
       name: true, shopName: true, mobileNo: true, aadharNo: true,
@@ -129,7 +133,7 @@ export default function AddCustomerScreen() {
       pan_card_no: panNo.toUpperCase(),
       address: address.trim(),
       initial_amount: parsedAmount,
-      agent_id: selectedAgent,
+      agent_id: selectedAgent, // This will be null if "None" is selected (which is correct)
       created_by: profile.id,
     });
     setLoading(false);
@@ -137,13 +141,14 @@ export default function AddCustomerScreen() {
       if (error.code === '23505') {
         Alert.alert('Error', 'A customer with this name already exists.');
       } else {
-        Alert.alert('Error', 'Failed to create customer. (Check RLS)');
+        Alert.alert('Error', 'Failed to create customer.');
       }
     } else {
       Alert.alert('Success', 'Customer created successfully.');
-      router.back(); // <-- THE FIX
+      router.back();
     }
   };
+  
   const getValidationIcon = (field: string, value: string) => {
     if (!touched[field] && !value) return null;
     if (errors[field]) {
@@ -168,19 +173,67 @@ export default function AddCustomerScreen() {
     }
     return null;
   };
+  
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: themeColors.formBackground },
-    customHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 10, backgroundColor: themeColors.header, borderBottomWidth: 1, borderBottomColor: themeColors.borderColor, },
+    customHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingBottom: 10,
+      backgroundColor: themeColors.header,
+      borderBottomWidth: 1,
+      borderBottomColor: themeColors.borderColor,
+    },
     backButton: { padding: 10, marginLeft: 5 },
     headerTitle: { fontSize: 20, fontWeight: 'bold', marginLeft: 10, color: themeColors.text },
     formContainer: { padding: 20 },
-    inputContainer: { backgroundColor: themeColors.background, borderRadius: 10, borderWidth: 1, borderColor: themeColors.borderColor, flexDirection: 'row', alignItems: 'center', marginBottom: 4, },
-    input: { flex: 1, padding: 15, fontSize: 16, color: themeColors.text, },
-    icon: { paddingHorizontal: 10, },
-    errorText: { color: themeColors.danger, fontSize: 12, marginLeft: 10, marginBottom: 10, },
-    label: { fontSize: 14, color: themeColors.textSecondary, marginBottom: 5, marginLeft: 5, marginTop: 10, },
-    pickerContainer: { backgroundColor: themeColors.background, borderRadius: 10, borderWidth: 1, borderColor: themeColors.borderColor, marginBottom: 20, justifyContent: 'center', },
-    picker: { width: '100%', height: 60, color: themeColors.text },
+    inputContainer: {
+      backgroundColor: themeColors.background,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: themeColors.borderColor,
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 4,
+    },
+    input: {
+      flex: 1,
+      padding: 15,
+      fontSize: 16,
+      color: themeColors.text,
+    },
+    icon: {
+      paddingHorizontal: 10,
+    },
+    errorText: {
+      color: themeColors.danger,
+      fontSize: 12,
+      marginLeft: 10,
+      marginBottom: 10,
+    },
+    label: {
+      fontSize: 14,
+      color: themeColors.textSecondary,
+      marginBottom: 5,
+      marginLeft: 5,
+      marginTop: 10,
+    },
+    pickerButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: themeColors.borderColor,
+      borderRadius: 8,
+      backgroundColor: themeColors.background,
+      padding: 15,
+      height: 55,
+      marginBottom: 20,
+    },
+    pickerButtonText: {
+      fontSize: 16,
+      color: themeColors.text,
+    },
     button: { borderRadius: 10, paddingVertical: 15, elevation: 2, alignItems: 'center' },
     submitButton: { backgroundColor: themeColors.buttonPrimary, marginTop: 10 },
     submitButtonText: { fontSize: 16, fontWeight: 'bold', color: themeColors.buttonPrimaryText },
@@ -193,14 +246,11 @@ export default function AddCustomerScreen() {
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={[styles.customHeader, { paddingTop: insets.top }]}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons
-              name="arrow-back"
-              size={24}
-              color={themeColors.text}
-            />
+            <Ionicons name="arrow-back" size={24} color={themeColors.text} />
           </Pressable>
           <Text style={styles.headerTitle}>Add New Customer</Text>
         </View>
+
         <ScrollView contentContainerStyle={styles.formContainer}>
           <Text style={styles.label}>Customer Name (Unique)</Text>
           <View style={[styles.inputContainer, errors.name && touched.name && { borderColor: themeColors.danger }]}>
@@ -244,18 +294,48 @@ export default function AddCustomerScreen() {
             {getValidationIcon('initialAmount', initialAmount)}
           </View>
           {touched.initialAmount && errors.initialAmount && <Text style={styles.errorText}>{errors.initialAmount}</Text>}
+
           <Text style={styles.label}>Assign Agent (Optional)</Text>
-          <View style={styles.pickerContainer}>
-            <Picker selectedValue={selectedAgent} onValueChange={(itemValue) => setSelectedAgent(itemValue)} style={styles.picker} itemStyle={{ color: themeColors.text }}>
-              <Picker.Item label="None (Unassigned)" value={null} />
-              {agents.map((agent) => (<Picker.Item key={agent.id} label={agent.username} value={agent.id}/>))}
-            </Picker>
-          </View>
-          <Pressable style={[styles.button, styles.submitButton]} onPress={handleSubmit} disabled={loading}>
-            {loading ? (<ActivityIndicator color={themeColors.buttonPrimaryText} />) : (<Text style={styles.submitButtonText}>SAVE CUSTOMER</Text>)}
+          <Pressable
+            style={styles.pickerButton}
+            onPress={() => setIsAgentModalVisible(true)}>
+            <Text style={styles.pickerButtonText}>{selectedAgentName}</Text>
+            <Ionicons
+              name="chevron-down"
+              size={20}
+              color={themeColors.textSecondary}
+            />
+          </Pressable>
+
+          <Pressable
+            style={[styles.button, styles.submitButton]}
+            onPress={handleSubmit}
+            disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color={themeColors.buttonPrimaryText} />
+            ) : (
+              <Text style={styles.submitButtonText}>SAVE CUSTOMER</Text>
+            )}
           </Pressable>
         </ScrollView>
       </SafeAreaView>
+
+      <AgentPickerModal
+        visible={isAgentModalVisible}
+        onClose={() => setIsAgentModalVisible(false)}
+        title="Assign Agent"
+        agents={agents}
+        currentSelectionId={selectedAgent}
+        showAllOption={false}
+        showNoneOption={true}
+        onSelect={(selection) => {
+          // --- THIS IS THE FIX ---
+          // We set the state to selection.id, which is `null` for "None"
+          setSelectedAgent(selection.id); 
+          setSelectedAgentName(selection.name);
+          // --- END FIX ---
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

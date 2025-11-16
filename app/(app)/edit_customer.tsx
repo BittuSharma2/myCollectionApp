@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
-import { useLocalSearchParams, useRouter } from 'expo-router'; // <-- THE FIX
+// import { Picker } from '@react-native-picker/picker'; // No longer needed
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,6 +16,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AgentPickerModal from '../../components/AgentPickerModal'; // <-- Import modal
 import { Colors } from '../../constants/theme';
 import { supabase } from '../../lib/supabase';
 
@@ -25,7 +26,7 @@ type Agent = {
 };
 
 export default function EditCustomerScreen() {
-  const router = useRouter(); // <-- THE FIX
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
@@ -45,7 +46,12 @@ export default function EditCustomerScreen() {
   const [panNo, setPanNo] = useState('');
   const [address, setAddress] = useState('');
   const [agents, setAgents] = useState<Agent[]>([]);
+  
+  // --- STATE FOR MODAL ---
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [isAgentModalVisible, setIsAgentModalVisible] = useState(false);
+  const [selectedAgentName, setSelectedAgentName] = useState('Loading...');
+  
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [errors, setErrors] = useState<{ [key: string]: string | null }>({});
@@ -55,6 +61,7 @@ export default function EditCustomerScreen() {
     if (!customerId) return;
     const fetchData = async () => {
       setLoadingData(true);
+      
       const [customerPromise, agentsPromise] = await Promise.all([
         supabase
           .from('customers')
@@ -66,8 +73,18 @@ export default function EditCustomerScreen() {
           .select('id, username')
           .eq('role', 'user')
       ]);
-      if (customerPromise.error) { Alert.alert('Error', 'Failed to load customer data.'); }
-      else {
+
+      let agentList: Agent[] = [];
+      if (agentsPromise.error) { 
+        Alert.alert('Error', 'Failed to load agent list. (Check RLS)'); 
+      } else { 
+        agentList = agentsPromise.data || [];
+        setAgents(agentList); 
+      }
+      
+      if (customerPromise.error) { 
+        Alert.alert('Error', 'Failed to load customer data.'); 
+      } else {
         const data = customerPromise.data;
         setName(data.name);
         setShopName(data.shop_name);
@@ -76,9 +93,14 @@ export default function EditCustomerScreen() {
         setPanNo(data.pan_card_no);
         setAddress(data.address);
         setSelectedAgent(data.agent_id);
+
+        if (data.agent_id) {
+          const agent = agentList.find(a => a.id === data.agent_id);
+          setSelectedAgentName(agent ? agent.username : 'None (Unassigned)');
+        } else {
+          setSelectedAgentName('None (Unassigned)');
+        }
       }
-      if (agentsPromise.error) { Alert.alert('Error', 'Failed to load agent list. (Check RLS)'); }
-      else { setAgents(agentsPromise.data || []); }
       setLoadingData(false);
     };
     fetchData();
@@ -113,6 +135,7 @@ export default function EditCustomerScreen() {
     const error = validateField(field, value);
     setErrors((prev) => ({ ...prev, [field]: error }));
   };
+  
   const handleSubmit = async () => {
     setTouched({
       name: true, shopName: true, mobileNo: true, aadharNo: true,
@@ -142,7 +165,7 @@ export default function EditCustomerScreen() {
         aadhar_card_no: aadharNo,
         pan_card_no: panNo.toUpperCase(),
         address: address.trim(),
-        agent_id: selectedAgent,
+        agent_id: selectedAgent, // This will be null if "None" is selected (which is correct)
       })
       .eq('id', customerId);
     setLoading(false);
@@ -154,9 +177,10 @@ export default function EditCustomerScreen() {
       }
     } else {
       Alert.alert('Success', 'Customer updated successfully.');
-      router.back(); // <-- THE FIX
+      router.back();
     }
   };
+  
   const getValidationIcon = (field: string) => {
     if (!touched[field]) {
       const value = (field === 'name') ? name :
@@ -189,6 +213,7 @@ export default function EditCustomerScreen() {
       />
     );
   };
+  
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: themeColors.formBackground },
     customHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 10, backgroundColor: themeColors.header, borderBottomWidth: 1, borderBottomColor: themeColors.borderColor, },
@@ -200,8 +225,22 @@ export default function EditCustomerScreen() {
     icon: { paddingHorizontal: 10, },
     errorText: { color: themeColors.danger, fontSize: 12, marginLeft: 10, marginBottom: 10, },
     label: { fontSize: 14, color: themeColors.textSecondary, marginBottom: 5, marginLeft: 5, marginTop: 10, },
-    pickerContainer: { backgroundColor: themeColors.background, borderRadius: 10, borderWidth: 1, borderColor: themeColors.borderColor, marginBottom: 20, justifyContent: 'center', },
-    picker: { width: '100%', height: 60, color: themeColors.text },
+    pickerButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: themeColors.borderColor,
+      borderRadius: 8,
+      backgroundColor: themeColors.background,
+      padding: 15,
+      height: 55,
+      marginBottom: 20,
+    },
+    pickerButtonText: {
+      fontSize: 16,
+      color: themeColors.text,
+    },
     button: { borderRadius: 10, paddingVertical: 15, elevation: 2, alignItems: 'center' },
     submitButton: { backgroundColor: themeColors.buttonPrimary, marginTop: 10 },
     submitButtonText: { fontSize: 16, fontWeight: 'bold', color: themeColors.buttonPrimaryText },
@@ -258,21 +297,42 @@ export default function EditCustomerScreen() {
               {getValidationIcon('address')}
             </View>
             {touched.address && errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
+            
             <Text style={styles.label}>Assign Agent</Text>
-            <View style={styles.pickerContainer}>
-              <Picker selectedValue={selectedAgent} onValueChange={(itemValue) => setSelectedAgent(itemValue)} style={styles.picker} itemStyle={{ color: themeColors.text }}>
-                <Picker.Item label="None (Unassigned)" value={null} />
-                {agents.map((agent) => (
-                  <Picker.Item key={agent.id} label={agent.username} value={agent.id} />
-                ))}
-              </Picker>
-            </View>
+            <Pressable
+              style={styles.pickerButton}
+              onPress={() => setIsAgentModalVisible(true)}>
+              <Text style={styles.pickerButtonText}>{selectedAgentName}</Text>
+              <Ionicons
+                name="chevron-down"
+                size={20}
+                color={themeColors.textSecondary}
+              />
+            </Pressable>
+            
             <Pressable style={[styles.button, styles.submitButton]} onPress={handleSubmit} disabled={loading}>
               {loading ? (<ActivityIndicator color={themeColors.buttonPrimaryText} />) : (<Text style={styles.submitButtonText}>SAVE CHANGES</Text>)}
             </Pressable>
           </ScrollView>
         )}
       </SafeAreaView>
+
+      <AgentPickerModal
+        visible={isAgentModalVisible}
+        onClose={() => setIsAgentModalVisible(false)}
+        title="Assign Agent"
+        agents={agents}
+        currentSelectionId={selectedAgent}
+        showAllOption={false}
+        showNoneOption={true}
+        onSelect={(selection) => {
+          // --- THIS IS THE FIX ---
+          // We set the state to selection.id, which is `null` for "None"
+          setSelectedAgent(selection.id);
+          setSelectedAgentName(selection.name);
+          // --- END FIX ---
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

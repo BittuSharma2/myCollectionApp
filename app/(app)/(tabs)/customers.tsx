@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -18,11 +17,11 @@ import { supabase } from '../../../lib/supabase';
 
 import AddCollectionModal from '../../../components/AddCollectionModal';
 import AddDebitModal from '../../../components/AddDebitModal';
+import AgentPickerModal from '../../../components/AgentPickerModal';
 import CustomHeader from '../../../components/CustomHeader';
 import SearchBar from '../../../components/SearchBar';
 import { Colors } from '../../../constants/theme';
 
-// (All types, state, and functions are unchanged)
 type Agent = { id: string; username: string };
 type Customer = {
   id: number;
@@ -51,9 +50,15 @@ export default function CustomersScreen() {
   const [selectedCustomer, setSelectedCustomer] =
     useState<SimplifiedCustomer | null>(null);
   const [agentsList, setAgentsList] = useState<Agent[]>([]);
-  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>('all');
+  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string | null>('all');
   const [isDebitModalVisible, setIsDebitModalVisible] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isAgentModalVisible, setIsAgentModalVisible] = useState(false);
+  
+  // --- (THE FIX) ---
+  // Change the default text to "All Customers"
+  const [selectedAgentName, setSelectedAgentName] = useState('All Customers');
+  // --- (END FIX) ---
 
   const fetchAgentsForFilter = async () => {
     const { data } = await supabase
@@ -76,9 +81,12 @@ export default function CustomersScreen() {
         profiles ( username )
       `);
     if (isAdmin) {
-      if (selectedAgentFilter === 'none') query = query.is('agent_id', null);
-      else if (selectedAgentFilter !== 'all')
+      if (selectedAgentFilter === null) {
+        query = query.is('agent_id', null);
+      }
+      else if (selectedAgentFilter !== 'all') {
         query = query.eq('agent_id', selectedAgentFilter);
+      }
     }
     if (searchQuery) query = query.ilike('name', `%${searchQuery}%`);
     const { data: customerData, error } = await query
@@ -180,14 +188,22 @@ export default function CustomersScreen() {
       backgroundColor: themeColors.background,
     },
     filterLabel: { fontSize: 14, color: themeColors.textSecondary },
-    pickerContainer: {
+    pickerButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       borderWidth: 1,
       borderColor: themeColors.borderColor,
       borderRadius: 8,
       marginTop: 5,
       backgroundColor: themeColors.card,
+      padding: 15,
+      height: 55,
     },
-    picker: { width: '100%', height: 50, color: themeColors.text },
+    pickerButtonText: {
+      fontSize: 16,
+      color: themeColors.text,
+    },
     emptyText: {
       textAlign: 'center',
       marginTop: 30,
@@ -333,24 +349,16 @@ export default function CustomersScreen() {
       {isAdmin && (
         <View style={styles.filterContainer}>
           <Text style={styles.filterLabel}>Filter by Agent:</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={selectedAgentFilter}
-              onValueChange={(itemValue) => setSelectedAgentFilter(itemValue)}
-              style={styles.picker}
-              itemStyle={{ color: themeColors.text }}
-            >
-              <Picker.Item label="All Customers" value="all" />
-              <Picker.Item label="Unassigned" value="none" />
-              {agentsList.map((agent) => (
-                <Picker.Item
-                  key={agent.id}
-                  label={agent.username}
-                  value={agent.id}
-                />
-              ))}
-            </Picker>
-          </View>
+          <Pressable
+            style={styles.pickerButton}
+            onPress={() => setIsAgentModalVisible(true)}>
+            <Text style={styles.pickerButtonText}>{selectedAgentName}</Text>
+            <Ionicons
+              name="chevron-down"
+              size={20}
+              color={themeColors.textSecondary}
+            />
+          </Pressable>
         </View>
       )}
       {loading && !isRefreshing ? (
@@ -373,12 +381,9 @@ export default function CustomersScreen() {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={onRefresh}
-              colors={[themeColors.text]} // Spinner color
-              tintColor={themeColors.text} // Spinner color (iOS)
-              // --- (THE FIX) ---
-              // This sets the circle background color
+              colors={[themeColors.text]}
+              tintColor={themeColors.text}
               progressBackgroundColor={themeColors.card}
-              // --- (END FIX) ---
             />
           }
         />
@@ -394,6 +399,19 @@ export default function CustomersScreen() {
         onClose={() => setIsDebitModalVisible(false)}
         account={selectedCustomer}
         onSuccess={onDebitSuccess}
+      />
+      <AgentPickerModal
+        visible={isAgentModalVisible}
+        onClose={() => setIsAgentModalVisible(false)}
+        title="Filter by Agent"
+        agents={agentsList}
+        currentSelectionId={selectedAgentFilter}
+        showAllOption={true}
+        showNoneOption={true}
+        onSelect={(selection) => {
+          setSelectedAgentFilter(selection.id);
+          setSelectedAgentName(selection.name);
+        }}
       />
       {isAdmin && (
         <Pressable
