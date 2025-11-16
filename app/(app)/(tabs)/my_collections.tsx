@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -17,6 +18,7 @@ import { Colors } from '../../../constants/theme';
 import { useAuth } from '../../../context/AuthContext';
 import { supabase } from '../../../lib/supabase';
 
+// (All types, state, and functions are unchanged)
 type DailyCollection = {
   id: number;
   amount: number;
@@ -25,7 +27,6 @@ type DailyCollection = {
   } | null;
 };
 
-// This is the AGENT's history screen
 export default function MyCollectionsScreen() {
   const { profile } = useAuth();
   const colorScheme = useColorScheme() ?? 'light';
@@ -35,32 +36,35 @@ export default function MyCollectionsScreen() {
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchHistory = async () => {
     if (!profile) return;
-    setLoading(true);
+    if (!isRefreshing) {
+      setLoading(true);
+    }
     const startDate = new Date(date);
     startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(date);
     endDate.setHours(23, 59, 59, 999);
-
     const { data, error } = await supabase
       .from('transactions')
       .select('id, amount, customers ( name )')
-      .eq('user_id', profile.id) // Filter by the logged-in agent
-      .gt('amount', 0) // Only collections
+      .eq('user_id', profile.id)
+      .gt('amount', 0)
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString())
       .order('created_at', { ascending: false })
       .returns<DailyCollection[]>();
-
     if (error) {
       console.error('Error fetching history:', error.message);
       alert('Failed to fetch history');
+      setIsRefreshing(false);
     } else {
       setCollections(data || []);
     }
     setLoading(false);
+    setIsRefreshing(false);
   };
 
   useFocusEffect(
@@ -68,6 +72,11 @@ export default function MyCollectionsScreen() {
       fetchHistory();
     }, [date, profile])
   );
+
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchHistory();
+  }, [date, profile]);
 
   const totalCollection = useMemo(() => {
     return collections.reduce((sum, item) => sum + item.amount, 0);
@@ -123,7 +132,6 @@ export default function MyCollectionsScreen() {
       color: themeColors.buttonPrimaryText,
       marginTop: 5,
     },
-    // --- NEW CARD STYLES ---
     itemContainer: {
       backgroundColor: themeColors.card,
       flexDirection: 'row',
@@ -131,8 +139,8 @@ export default function MyCollectionsScreen() {
       alignItems: 'center',
       padding: 16,
       marginHorizontal: 15,
-      marginVertical: 6, // Gap
-      borderRadius: 12, // Rounded
+      marginVertical: 6,
+      borderRadius: 12,
       elevation: 2,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
@@ -156,9 +164,8 @@ export default function MyCollectionsScreen() {
     itemAmount: {
       fontSize: 16,
       fontWeight: 'bold',
-      color: 'green', // Collection is green
+      color: 'green',
     },
-    // ---
     emptyText: {
       textAlign: 'center',
       marginTop: 30,
@@ -167,12 +174,11 @@ export default function MyCollectionsScreen() {
     },
   });
 
-  // --- UPDATED renderItem ---
   const renderItem = ({ item }: { item: DailyCollection }) => (
     <Pressable
       style={({ pressed }) => [
         styles.itemContainer,
-        pressed && { backgroundColor: themeColors.input }, // Visual feedback on press
+        pressed && { backgroundColor: themeColors.input },
       ]}
     >
       <View style={styles.itemLeft}>
@@ -218,7 +224,7 @@ export default function MyCollectionsScreen() {
         <Text style={styles.totalAmount}>₹ {totalCollection.toFixed(1)}</Text>
       </View>
 
-      {loading ? (
+      {loading && !isRefreshing ? (
         <ActivityIndicator
           size="large"
           style={{ marginTop: 50 }}
@@ -233,6 +239,18 @@ export default function MyCollectionsScreen() {
             <Text style={styles.emptyText}>No collections for this day.</Text>
           }
           style={{ backgroundColor: themeColors.background }}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={[themeColors.text]} // Spinner color
+              tintColor={themeColors.text} // Spinner color (iOS)
+              // --- (THE FIX) ---
+              // This sets the circle background color
+              progressBackgroundColor={themeColors.card}
+              // --- (END FIX) ---
+            />
+          }
         />
       )}
 

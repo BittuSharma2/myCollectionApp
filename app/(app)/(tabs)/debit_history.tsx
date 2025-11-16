@@ -3,14 +3,15 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    useColorScheme,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomHeader from '../../../components/CustomHeader';
@@ -41,8 +42,16 @@ export default function DebitHistoryScreen() {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<DebitTransaction | null>(null);
 
+  // --- 2. Add isRefreshing state ---
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // --- 4. Modify fetchDebitHistory ---
   const fetchDebitHistory = async () => {
-    setLoading(true);
+    // Only show full-page loader on initial load
+    if (!isRefreshing) {
+      setLoading(true);
+    }
+    
     const startDate = new Date(date);
     startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(date);
@@ -55,12 +64,25 @@ export default function DebitHistoryScreen() {
       .lte('created_at', endDate.toISOString())
       .order('created_at', { ascending: false })
       .returns<DebitTransaction[]>();
-    if (error) { alert('Failed to fetch debit history'); }
-    else { setDebits(data || []); }
+      
+    if (error) { 
+      alert('Failed to fetch debit history'); 
+    }
+    else { 
+      setDebits(data || []); 
+    }
     setLoading(false);
+    setIsRefreshing(false); // Stop refresh on success or error
   };
 
   useFocusEffect(useCallback(() => { fetchDebitHistory(); }, [date]));
+  
+  // --- 3. Create onRefresh function ---
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchDebitHistory();
+  }, [date]); // Dependency
+
   const totalDebit = useMemo(() => {
     return debits.reduce((sum, item) => sum + Math.abs(item.amount), 0);
   }, [debits]);
@@ -247,9 +269,10 @@ export default function DebitHistoryScreen() {
         <Text style={styles.totalAmount}>₹ {totalDebit.toFixed(1)}</Text>
       </View>
 
-      {loading ? (
+      {/* Show spinner only on initial load, not on refresh */}
+      {loading && !isRefreshing ? (
         <ActivityIndicator
-          size="large" // <-- FIX 1: Removed colon
+          size="large"
           style={{ marginTop: 50 }}
           color={themeColors.tint}
         />
@@ -262,13 +285,23 @@ export default function DebitHistoryScreen() {
             <Text style={styles.emptyText}>No debits for this day.</Text>
           }
           onScroll={() => setSelectedItemId(null)}
+          // --- 5. Add the refreshControl prop ---
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={[themeColors.text]} // Spinner color
+              tintColor={themeColors.text} // Spinner color (iOS)
+              progressBackgroundColor={themeColors.card} // Circle color (Android)
+            />
+          }
         />
       )}
 
       {showDatePicker && (
         <DateTimePicker
           value={date}
-          mode="date" // <-- FIX 2: Removed colon
+          mode="date"
           display="default"
           onChange={onChangeDate}
           themeVariant={colorScheme}

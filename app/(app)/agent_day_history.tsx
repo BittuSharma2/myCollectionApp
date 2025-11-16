@@ -2,14 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    useColorScheme,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+  useColorScheme,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EditTransactionModal from '../../components/EditTransactionModal';
@@ -45,16 +46,24 @@ export default function AgentDayHistoryScreen() {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<DailyCollection | null>(null);
 
+  // --- 2. Add isRefreshing state ---
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const selectedDate = useMemo(() => {
     if (!date) return new Date();
     const parts = date.split('-').map((n) => parseInt(n, 10));
     return new Date(parts[0], parts[1] - 1, parts[2]);
   }, [date]);
 
-  // (All data fetching and handlers are unchanged)
+  // --- 4. Modify fetchHistory ---
   const fetchHistory = async () => {
     if (!agentId || !date) return;
-    setLoading(true);
+    
+    // Only show full-page loader on initial load
+    if (!isRefreshing) {
+      setLoading(true);
+    }
+    
     const startDate = new Date(selectedDate);
     startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(selectedDate);
@@ -68,14 +77,29 @@ export default function AgentDayHistoryScreen() {
       .lte('created_at', endDate.toISOString())
       .order('created_at', { ascending: false })
       .returns<DailyCollection[]>();
-    if (error) { alert('Failed to fetch history'); }
-    else { setCollections(data || []); }
+      
+    if (error) { 
+      alert('Failed to fetch history'); 
+    }
+    else { 
+      setCollections(data || []); 
+    }
     setLoading(false);
+    setIsRefreshing(false); // Stop refresh on success or error
   };
+
   useFocusEffect(useCallback(() => { fetchHistory(); }, [agentId, date]));
+
+  // --- 3. Create onRefresh function ---
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchHistory();
+  }, [agentId, date]); // Dependencies
+
   const totalCollection = useMemo(() => {
     return collections.reduce((sum, item) => sum + item.amount, 0);
   }, [collections]);
+  
   const handleEditPress = (item: DailyCollection) => {
     setSelectedTransaction(item);
     setIsEditModalVisible(true);
@@ -143,15 +167,14 @@ export default function AgentDayHistoryScreen() {
       opacity: 0.8,
       marginTop: 2,
     },
-    // --- UPDATED CARD STYLES ---
     itemContainer: {
       backgroundColor: themeColors.card,
       flexDirection: 'row',
-      alignItems: 'center', // Keep vertical alignment
+      alignItems: 'center',
       padding: 16,
       marginHorizontal: 15,
-      marginVertical: 6, // Gap
-      borderRadius: 12, // Rounded
+      marginVertical: 6,
+      borderRadius: 12,
       elevation: 2,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
@@ -159,7 +182,7 @@ export default function AgentDayHistoryScreen() {
       shadowRadius: 2,
     },
     itemLeft: {
-      flex: 1, // This side will grow and shrink
+      flex: 1,
       marginRight: 10,
     },
     itemName: {
@@ -174,7 +197,7 @@ export default function AgentDayHistoryScreen() {
       marginTop: 2,
     },
     itemRight: {
-      width: 100, // <-- THIS IS THE FIX. A fixed width container.
+      width: 100,
       alignItems: 'flex-end',
     },
     itemAmount: {
@@ -187,9 +210,8 @@ export default function AgentDayHistoryScreen() {
       justifyContent: 'flex-end',
     },
     iconButton: {
-      paddingHorizontal: 8, // Add some space between icons
+      paddingHorizontal: 8,
     },
-    // ---
     emptyText: {
       textAlign: 'center',
       marginTop: 30,
@@ -198,7 +220,6 @@ export default function AgentDayHistoryScreen() {
     },
   });
 
-  // --- UPDATED renderItem ---
   const renderItem = ({ item }: { item: DailyCollection }) => {
     const isSelected = selectedItemId === item.id;
 
@@ -258,7 +279,8 @@ export default function AgentDayHistoryScreen() {
         </Text>
       </View>
 
-      {loading ? (
+      {/* Show spinner only on initial load, not on refresh */}
+      {loading && !isRefreshing ? (
         <ActivityIndicator
           size="large"
           style={{ marginTop: 50 }}
@@ -273,6 +295,16 @@ export default function AgentDayHistoryScreen() {
             <Text style={styles.emptyText}>No collections for this day.</Text>
           }
           onScroll={() => setSelectedItemId(null)}
+          // --- 5. Add the refreshControl prop ---
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={[themeColors.text]} // Spinner color
+              tintColor={themeColors.text} // Spinner color (iOS)
+              progressBackgroundColor={themeColors.card} // Circle color (Android)
+            />
+          }
         />
       )}
 

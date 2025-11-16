@@ -3,13 +3,14 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    useColorScheme,
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomHeader from '../../../components/CustomHeader';
@@ -32,12 +33,19 @@ export default function HistoryScreen() {
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  // --- 2. Add isRefreshing state ---
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const getSqlDate = (date: Date) => {
     return date.toISOString().split('T')[0];
   };
 
+  // --- 4. Modify fetchAdminHistory ---
   const fetchAdminHistory = async () => {
-    setLoading(true);
+    // Only show full-page loader on initial load
+    if (!isRefreshing) {
+      setLoading(true);
+    }
     const selectedDate = getSqlDate(date);
 
     const { data: summaryData, error: summaryError } = await supabase.rpc(
@@ -50,6 +58,7 @@ export default function HistoryScreen() {
       setSummary(summaryData || []);
     }
     setLoading(false);
+    setIsRefreshing(false); // Stop refresh on success or error
   };
 
   useFocusEffect(
@@ -57,6 +66,12 @@ export default function HistoryScreen() {
       fetchAdminHistory();
     }, [date])
   );
+  
+  // --- 3. Create onRefresh function ---
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchAdminHistory();
+  }, [date]); // Dependency
 
   const totalCollection = useMemo(() => {
     return summary.reduce((sum, item) => sum + item.total_collection, 0);
@@ -72,7 +87,6 @@ export default function HistoryScreen() {
     setDate(currentDate);
   };
 
-  // --- Styles ---
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: themeColors.background },
     datePickerButton: {
@@ -106,7 +120,6 @@ export default function HistoryScreen() {
       marginTop: 10,
       marginBottom: 5,
     },
-    // --- NEW CARD STYLES ---
     itemContainer: {
       backgroundColor: themeColors.card,
       flexDirection: 'row',
@@ -114,8 +127,8 @@ export default function HistoryScreen() {
       alignItems: 'center',
       padding: 16,
       marginHorizontal: 15,
-      marginVertical: 6, // Gap
-      borderRadius: 12, // Rounded
+      marginVertical: 6,
+      borderRadius: 12,
       elevation: 2,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
@@ -138,7 +151,6 @@ export default function HistoryScreen() {
       color: themeColors.text,
       marginRight: 10,
     },
-    // ---
     emptyText: {
       textAlign: 'center',
       marginTop: 30,
@@ -147,7 +159,6 @@ export default function HistoryScreen() {
     },
   });
 
-  // --- UPDATED renderSummaryItem ---
   const renderSummaryItem = ({ item }: { item: AgentSummary }) => (
     <Pressable
       style={({ pressed }) => [
@@ -206,7 +217,8 @@ export default function HistoryScreen() {
 
       <Text style={styles.listHeader}>Agent Summary</Text>
 
-      {loading ? (
+      {/* Show spinner only on initial load, not on refresh */}
+      {loading && !isRefreshing ? (
         <ActivityIndicator size="large" style={{ marginTop: 50 }} color={themeColors.tint} />
       ) : (
         <FlatList
@@ -215,6 +227,16 @@ export default function HistoryScreen() {
           renderItem={renderSummaryItem}
           ListEmptyComponent={
             <Text style={styles.emptyText}>No collections for this day.</Text>
+          }
+          // --- 5. Add the refreshControl prop ---
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={[themeColors.text]} // Spinner color
+              tintColor={themeColors.text} // Spinner color (iOS)
+              progressBackgroundColor={themeColors.card} // Circle color (Android)
+            />
           }
         />
       )}

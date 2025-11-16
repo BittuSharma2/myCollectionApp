@@ -6,6 +6,7 @@ import {
   Alert,
   FlatList,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,7 +28,7 @@ type Agent = {
 };
 type Customer = { id: number; name: string; shop_name: string };
 
-// --- Theme-aware DetailRow Component ---
+// (DetailRow component is unchanged)
 const DetailRow = ({
   label,
   value,
@@ -58,11 +59,24 @@ export default function AgentProfileScreen() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isProfileVisible, setIsProfileVisible] = useState(true);
+  
+  // --- (THE FIX) ---
+  // 1. Profile is now HIDDEN by default
+  const [isProfileVisible, setIsProfileVisible] = useState(false);
+  // --- (END FIX) ---
 
+  // --- 2. Add isRefreshing state ---
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // --- 4. Modify fetchData ---
   const fetchData = async () => {
     if (!agentId) return;
-    setLoading(true);
+    
+    // Only show full-page loader on initial load
+    if (!isRefreshing) {
+      setLoading(true);
+    }
+    
     const [agentPromise, customersPromise] = await Promise.all([
       supabase
         .from('profiles')
@@ -86,6 +100,7 @@ export default function AgentProfileScreen() {
       setCustomers(customersPromise.data || []);
     }
     setLoading(false);
+    setIsRefreshing(false); // Stop refresh on success or error
   };
 
   useFocusEffect(
@@ -93,6 +108,12 @@ export default function AgentProfileScreen() {
       fetchData();
     }, [agentId])
   );
+  
+  // --- 3. Create onRefresh function ---
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchData();
+  }, [agentId]); // Dependency
 
   const handleDeleteAgent = () => {
     Alert.alert(
@@ -105,15 +126,11 @@ export default function AgentProfileScreen() {
     );
   };
 
-  // --- (THE FIX) ---
-  // This function now correctly deletes the agent's auth account
   const deleteProfile = async () => {
     if (!agent) return;
-
-    // 1. Un-assign all customers from this agent
     const { error: updateError } = await supabase
       .from('customers')
-      .update({ agent_id: null }) // Set agent_id to null
+      .update({ agent_id: null })
       .eq('agent_id', agent.id);
 
     if (updateError) {
@@ -121,7 +138,6 @@ export default function AgentProfileScreen() {
       return;
     }
 
-    // 2. Call the Edge Function to delete the auth user
     const { error: funcError } = await supabase.functions.invoke(
       'delete-user',
       { body: { user_id: agent.id } }
@@ -134,7 +150,6 @@ export default function AgentProfileScreen() {
       router.back();
     }
   };
-  // --- (END FIX) ---
 
   const renderCustomerItem = ({ item }: { item: Customer }) => (
     <View
@@ -155,7 +170,7 @@ export default function AgentProfileScreen() {
         style={[styles.viewButton, { backgroundColor: themeColors.buttonDefault }]}
         onPress={() =>
           router.push({
-            pathname: '/(app)/customer_profile' as any, // Use full path
+            pathname: '/(app)/customer_profile' as any,
             params: { customerId: item.id },
           })
         }>
@@ -201,14 +216,26 @@ export default function AgentProfileScreen() {
         </Pressable>
       </View>
 
-      {loading ? (
+      {/* Show spinner only on initial load, not on refresh */}
+      {loading && !isRefreshing ? (
         <ActivityIndicator
           size="large"
           style={{ flex: 1 }}
           color={themeColors.tint}
         />
       ) : agent ? (
-        <ScrollView>
+        <ScrollView
+          // --- 5. Add the refreshControl prop ---
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={[themeColors.text]} // Spinner color
+              tintColor={themeColors.text} // Spinner color (iOS)
+              progressBackgroundColor={themeColors.card} // Circle color (Android)
+            />
+          }
+        >
           {isProfileVisible && (
             <>
               <View
@@ -263,7 +290,7 @@ export default function AgentProfileScreen() {
                   ]}
                   onPress={() =>
                     router.push({
-                      pathname: '/(app)/edit_agent' as any, // Use full path
+                      pathname: '/(app)/edit_agent' as any,
                       params: { agentId: agent.id },
                     })
                   }>
@@ -303,6 +330,8 @@ export default function AgentProfileScreen() {
           <View
             style={[
               styles.listContainer,
+              // Add a top margin if the profile is hidden
+              !isProfileVisible && { marginTop: 20 },
               { backgroundColor: themeColors.card },
             ]}>
             <Text

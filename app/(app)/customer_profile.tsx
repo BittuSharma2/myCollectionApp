@@ -6,6 +6,7 @@ import {
   Alert,
   FlatList,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -32,7 +33,7 @@ type Customer = {
 };
 type Transaction = { id: number; created_at: string; amount: number };
 
-// --- Theme-aware DetailRow Component ---
+// (DetailRow component is unchanged)
 const DetailRow = ({
   label,
   value,
@@ -52,7 +53,7 @@ const DetailRow = ({
   </View>
 );
 
-// --- UPDATED: History List Header (with Debit/Credit) ---
+// (ListHeader component is unchanged)
 const ListHeader = ({ themeColors }: { themeColors: any }) => (
   <View
     style={[
@@ -81,15 +82,23 @@ export default function CustomerProfileScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
 
-  // (State is unchanged)
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [isProfileVisible, setIsProfileVisible] = useState(false);
 
+  // --- 2. Add isRefreshing state ---
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // --- 4. Modify fetchData ---
   const fetchData = async () => {
     if (!customerId) return;
-    setLoading(true);
+    
+    // Only show full-page spinner on initial load
+    if (!isRefreshing) {
+      setLoading(true);
+    }
+
     const [customerPromise, transPromise] = await Promise.all([
       supabase
         .from('customers')
@@ -113,6 +122,7 @@ export default function CustomerProfileScreen() {
       setTransactions(transPromise.data || []);
     }
     setLoading(false);
+    setIsRefreshing(false); // Stop refresh on success or error
   };
 
   useFocusEffect(
@@ -120,6 +130,12 @@ export default function CustomerProfileScreen() {
       fetchData();
     }, [customerId])
   );
+
+  // --- 3. Create onRefresh function ---
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchData();
+  }, [customerId]); // Dependency
 
   const handleDeleteCustomer = () => {
     Alert.alert(
@@ -132,7 +148,6 @@ export default function CustomerProfileScreen() {
     );
   };
 
-  // (Using the simple delete function, as requested)
   const deleteCustomer = async () => {
     if (!customer) return;
     const { error } = await supabase
@@ -147,7 +162,7 @@ export default function CustomerProfileScreen() {
     }
   };
 
-  // --- UPDATED: Data processing (with Debit/Credit) ---
+  // (Data processing logic is unchanged)
   let runningBalance = customer?.initial_amount || 0;
   const processedData = transactions.map((item, index) => {
     runningBalance += item.amount;
@@ -163,7 +178,7 @@ export default function CustomerProfileScreen() {
   });
   const totalBalance = runningBalance;
 
-  // --- UPDATED: renderItem (with Debit/Credit) ---
+  // (renderItem is unchanged)
   const renderItem = ({ item }: { item: (typeof processedData)[0] }) => (
     <View
       style={[
@@ -225,14 +240,26 @@ export default function CustomerProfileScreen() {
         )}
       </View>
 
-      {loading ? (
+      {/* Show spinner only on initial load, not on refresh */}
+      {loading && !isRefreshing ? (
         <ActivityIndicator
           size="large"
           style={{ flex: 1 }}
           color={themeColors.tint}
         />
       ) : customer ? (
-        <ScrollView>
+        <ScrollView
+          // --- 5. Add the refreshControl prop ---
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={[themeColors.text]} // Spinner color
+              tintColor={themeColors.text} // Spinner color (iOS)
+              progressBackgroundColor={themeColors.card} // Circle color (Android)
+            />
+          }
+        >
           {isAdmin && (
             <>
               {isProfileVisible && (
@@ -299,13 +326,10 @@ export default function CustomerProfileScreen() {
                         { backgroundColor: themeColors.buttonPrimary },
                       ]}
                       onPress={() =>
-                        // --- (THE FIX) ---
-                        // Corrected navigation path
                         router.push({
                           pathname: '/(app)/edit_customer' as any,
                           params: { customerId: customer.id },
                         })
-                        // --- (END FIX) ---
                       }>
                       <Ionicons
                         name="pencil"

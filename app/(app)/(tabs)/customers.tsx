@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -16,12 +17,12 @@ import { useAuth } from '../../../context/AuthContext';
 import { supabase } from '../../../lib/supabase';
 
 import AddCollectionModal from '../../../components/AddCollectionModal';
-import AddDebitModal from '../../../components/AddDebitModal'; // <-- Import new modal
+import AddDebitModal from '../../../components/AddDebitModal';
 import CustomHeader from '../../../components/CustomHeader';
 import SearchBar from '../../../components/SearchBar';
 import { Colors } from '../../../constants/theme';
 
-// (Types are unchanged)
+// (All types, state, and functions are unchanged)
 type Agent = { id: string; username: string };
 type Customer = {
   id: number;
@@ -40,7 +41,6 @@ export default function CustomersScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
 
-  // (State is unchanged)
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [balances, setBalances] = useState<Map<number, number>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -52,11 +52,9 @@ export default function CustomersScreen() {
     useState<SimplifiedCustomer | null>(null);
   const [agentsList, setAgentsList] = useState<Agent[]>([]);
   const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>('all');
-
-  // --- NEW: State for Debit Modal ---
   const [isDebitModalVisible, setIsDebitModalVisible] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // (All data functions are unchanged)
   const fetchAgentsForFilter = async () => {
     const { data } = await supabase
       .from('profiles')
@@ -67,33 +65,31 @@ export default function CustomersScreen() {
 
   const fetchCustomers = async () => {
     if (!profile) return;
-    setLoading(true);
+    if (!isRefreshing) {
+      setLoading(true);
+    }
     setCustomers([]);
     setBalances(new Map());
-
     let query = supabase.from('customers').select(`
         id, name, shop_name, agent_id,
         initial_amount,
         profiles ( username )
       `);
-
     if (isAdmin) {
       if (selectedAgentFilter === 'none') query = query.is('agent_id', null);
       else if (selectedAgentFilter !== 'all')
         query = query.eq('agent_id', selectedAgentFilter);
     }
     if (searchQuery) query = query.ilike('name', `%${searchQuery}%`);
-
     const { data: customerData, error } = await query
       .order('name', { ascending: true })
       .returns<Customer[]>();
-
     if (error) {
       console.error('Error fetching customers:', error.message);
       setLoading(false);
+      setIsRefreshing(false);
       return;
     }
-
     if (customerData && customerData.length > 0) {
       const customerIds = customerData.map((c) => c.id);
       const { data: transactions, error: balanceError } = await supabase
@@ -123,6 +119,7 @@ export default function CustomersScreen() {
       setCustomers([]);
     }
     setLoading(false);
+    setIsRefreshing(false);
   };
 
   useEffect(() => {
@@ -135,6 +132,11 @@ export default function CustomersScreen() {
     }, [profile, selectedAgentFilter, searchQuery])
   );
   
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchCustomers();
+  }, [profile, selectedAgentFilter, searchQuery]);
+
   const handleStatePress = (customer: Customer) => {
     router.push({
       pathname: '/(app)/customer_profile' as any,
@@ -142,7 +144,6 @@ export default function CustomersScreen() {
     });
     setOptionsVisibleFor(null);
   };
-  
   const handleViewPress = (customer: Customer) => {
     router.push({
       pathname: '/(app)/customer_profile' as any,
@@ -150,8 +151,6 @@ export default function CustomersScreen() {
     });
     setOptionsVisibleFor(null);
   };
-
-  // (Updated/New Handlers)
   const handleCollectPress = (customer: Customer) => {
     setSelectedCustomer({ id: customer.id, name: customer.name });
     setIsCollectionModalVisible(true);
@@ -162,8 +161,6 @@ export default function CustomersScreen() {
     setSelectedCustomer(null);
     fetchCustomers();
   };
-
-  // --- NEW: Debit Handlers ---
   const handleDebitPress = (customer: Customer) => {
     setSelectedCustomer({ id: customer.id, name: customer.name });
     setIsDebitModalVisible(true);
@@ -172,10 +169,9 @@ export default function CustomersScreen() {
   const onDebitSuccess = () => {
     setIsDebitModalVisible(false);
     setSelectedCustomer(null);
-    fetchCustomers(); // Also refresh list on debit
+    fetchCustomers();
   };
 
-  // (Styles are unchanged, defined inside component)
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: themeColors.background },
     filterContainer: {
@@ -223,7 +219,7 @@ export default function CustomersScreen() {
       alignItems: 'center',
       minWidth: 90,
     },
-    actionButton: { marginHorizontal: 10, alignItems: 'center' }, // Adjusted margin
+    actionButton: { marginHorizontal: 10, alignItems: 'center' },
     actionText: { fontSize: 12, color: themeColors.textSecondary, marginTop: 2 },
     balanceContainer: {
       justifyContent: 'center',
@@ -246,6 +242,7 @@ export default function CustomersScreen() {
   });
 
   const renderCustomerItem = ({ item }: { item: Customer }) => {
+    // (This function is unchanged)
     const isSelected = optionsVisibleFor === item.id;
     const agentName = item.profiles?.username || 'Unassigned';
     const totalBalance = balances.get(item.id) || item.initial_amount || 0;
@@ -259,11 +256,9 @@ export default function CustomersScreen() {
           <Text style={styles.itemSubtitle}>{item.shop_name}</Text>
           {isAdmin && <Text style={styles.itemAgent}>{agentName}</Text>}
         </View>
-
         <View style={styles.itemActions}>
           {isSelected ? (
             isAdmin ? (
-              // --- ADMIN BUTTONS (Updated) ---
               <>
                 <Pressable
                   style={styles.actionButton}
@@ -292,7 +287,6 @@ export default function CustomersScreen() {
                 </Pressable>
               </>
             ) : (
-              // --- AGENT BUTTONS (Unchanged) ---
               <>
                 <Pressable
                   style={styles.actionButton}
@@ -331,17 +325,11 @@ export default function CustomersScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <CustomHeader title={isAdmin ? 'Customers' : 'My Customers'} />
-
-      {/* --- (THE FIX) ---
-          The full props are now provided to SearchBar, fixing the error.
-      --- */}
       <SearchBar
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         placeholder="Search by Customer Name"
       />
-      {/* --- (END FIX) --- */}
-
       {isAdmin && (
         <View style={styles.filterContainer}>
           <Text style={styles.filterLabel}>Filter by Agent:</Text>
@@ -350,7 +338,7 @@ export default function CustomersScreen() {
               selectedValue={selectedAgentFilter}
               onValueChange={(itemValue) => setSelectedAgentFilter(itemValue)}
               style={styles.picker}
-              itemStyle={{ color: themeColors.text }} // For iOS
+              itemStyle={{ color: themeColors.text }}
             >
               <Picker.Item label="All Customers" value="all" />
               <Picker.Item label="Unassigned" value="none" />
@@ -365,8 +353,7 @@ export default function CustomersScreen() {
           </View>
         </View>
       )}
-
-      {loading ? (
+      {loading && !isRefreshing ? (
         <ActivityIndicator
           size="large"
           style={{ marginTop: 50 }}
@@ -382,24 +369,32 @@ export default function CustomersScreen() {
           }
           onScroll={() => setOptionsVisibleFor(null)}
           style={{ backgroundColor: themeColors.background }}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={[themeColors.text]} // Spinner color
+              tintColor={themeColors.text} // Spinner color (iOS)
+              // --- (THE FIX) ---
+              // This sets the circle background color
+              progressBackgroundColor={themeColors.card}
+              // --- (END FIX) ---
+            />
+          }
         />
       )}
-
       <AddCollectionModal
         visible={isCollectionModalVisible}
         onClose={() => setIsCollectionModalVisible(false)}
         account={selectedCustomer}
         onSuccess={onCollectionSuccess}
       />
-
-      {/* --- NEW: Add the Debit Modal --- */}
       <AddDebitModal
         visible={isDebitModalVisible}
         onClose={() => setIsDebitModalVisible(false)}
         account={selectedCustomer}
         onSuccess={onDebitSuccess}
       />
-
       {isAdmin && (
         <Pressable
           style={styles.fab}
