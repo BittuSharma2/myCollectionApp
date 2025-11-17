@@ -60,10 +60,8 @@ export default function AgentProfileScreen() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // --- (THE FIX) ---
-  // 1. Profile is now HIDDEN by default
+  // --- 1. Profile is now HIDDEN by default ---
   const [isProfileVisible, setIsProfileVisible] = useState(false);
-  // --- (END FIX) ---
 
   // --- 2. Add isRefreshing state ---
   const [isRefreshing, setIsRefreshing] = useState(false);

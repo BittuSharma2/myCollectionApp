@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-// import { Picker } from '@react-native-picker/picker'; // No longer needed
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -16,7 +15,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import AgentPickerModal from '../../components/AgentPickerModal'; // <-- Import modal
+import AgentPickerModal from '../../components/AgentPickerModal';
 import { Colors } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -33,13 +32,11 @@ export default function AddCustomerScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
 
-  // --- VALIDATION RULES (Moved Inside) ---
   const mobileRegex = /^\d{10}$/;
   const aadharRegex = /^\d{12}$/;
   const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
   const numberRegex = /^\d*\.?\d*$/;
   const notEmptyRegex = /.+/;
-  // ---
 
   const [name, setName] = useState('');
   const [shopName, setShopName] = useState('');
@@ -50,7 +47,6 @@ export default function AddCustomerScreen() {
   const [initialAmount, setInitialAmount] = useState('0');
   const [agents, setAgents] = useState<Agent[]>([]);
   
-  // --- STATE FOR MODAL ---
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [isAgentModalVisible, setIsAgentModalVisible] = useState(false);
   const [selectedAgentName, setSelectedAgentName] = useState('None (Unassigned)');
@@ -97,6 +93,7 @@ export default function AddCustomerScreen() {
     }
     return error;
   };
+
   const handleBlur = (field: string, value: string) => {
     setTouched((prev) => ({ ...prev, [field]: true }));
     const error = validateField(field, value);
@@ -125,6 +122,7 @@ export default function AddCustomerScreen() {
     }
     setLoading(true);
     const parsedAmount = parseFloat(initialAmount);
+    
     const { error } = await supabase.from('customers').insert({
       name: name.trim(),
       shop_name: shopName.trim(),
@@ -133,15 +131,17 @@ export default function AddCustomerScreen() {
       pan_card_no: panNo.toUpperCase(),
       address: address.trim(),
       initial_amount: parsedAmount,
-      agent_id: selectedAgent, // This will be null if "None" is selected (which is correct)
-      created_by: profile.id,
+      agent_id: selectedAgent,
+      // --- CHANGE: Removed 'created_by' since you are the only admin ---
     });
+
     setLoading(false);
     if (error) {
+      console.error('Create Customer Error:', error);
       if (error.code === '23505') {
         Alert.alert('Error', 'A customer with this name already exists.');
       } else {
-        Alert.alert('Error', 'Failed to create customer.');
+        Alert.alert('Error', `Failed: ${error.message}`);
       }
     } else {
       Alert.alert('Success', 'Customer created successfully.');
@@ -329,11 +329,8 @@ export default function AddCustomerScreen() {
         showAllOption={false}
         showNoneOption={true}
         onSelect={(selection) => {
-          // --- THIS IS THE FIX ---
-          // We set the state to selection.id, which is `null` for "None"
           setSelectedAgent(selection.id); 
           setSelectedAgentName(selection.name);
-          // --- END FIX ---
         }}
       />
     </KeyboardAvoidingView>

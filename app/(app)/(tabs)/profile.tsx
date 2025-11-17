@@ -116,13 +116,13 @@ export default function ProfileScreen() {
 
       <View style={styles.buttonContainer}>
         {/* Only show "Change Password" to Admins */}
-        {isAdmin && (
+        {/* {isAdmin && (
           <Pressable
             style={[
               styles.button,
               { backgroundColor: themeColors.buttonDefault },
             ]}
-            onPress={() => router.push('/(app)/modal' as any)}>
+            onPress={() => router.push('/(app)/change_password' as any)}>
             <Ionicons
               name="lock-closed-outline"
               size={20}
@@ -136,7 +136,7 @@ export default function ProfileScreen() {
               Change Password
             </Text>
           </Pressable>
-        )}
+        )} */}
 
         <Pressable
           style={[styles.button, { backgroundColor: themeColors.danger }]}

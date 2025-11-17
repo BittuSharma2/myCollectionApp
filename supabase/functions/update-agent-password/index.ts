@@ -6,8 +6,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 // Create an admin-level Supabase client
 const supabaseAdmin = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '' // Use the Service Role Key
+  Deno.env.get('MY_SUPABASE_URL') ?? '', // <-- THE FIX
+  Deno.env.get('MY_SERVICE_ROLE_KEY') ?? ''// Use the Service Role Key
 )
 
 serve(async (req) => {

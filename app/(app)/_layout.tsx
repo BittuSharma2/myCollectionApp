@@ -25,7 +25,7 @@ export default function AppStackLayout() {
       
       {/* This is your "Change Password" modal */}
       <Stack.Screen 
-        name="modal" 
+        name="change_password" 
         options={{ 
           presentation: 'modal',
           headerShown: true,

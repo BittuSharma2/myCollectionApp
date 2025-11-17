@@ -1,54 +1,65 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
-Deno.serve(async (req) => {
-  // This is needed for CORS
+// Create the admin client using your CUSTOM secret names
+const supabaseAdmin = createClient(
+  Deno.env.get('MY_SUPABASE_URL') ?? '',        // <-- MUST MATCH YOUR SECRET NAME
+  Deno.env.get('MY_SERVICE_ROLE_KEY') ?? ''     // <-- MUST MATCH YOUR SECRET NAME
+)
+
+serve(async (req) => {
+  // 1. Handle CORS (Pre-flight checks)
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+      },
+    })
   }
 
   try {
+    // 2. Parse the body
     const { user_id } = await req.json()
+    if (!user_id) throw new Error('User ID is required')
 
-    if (!user_id) {
-      throw new Error("Missing 'user_id' in request body")
+    console.log(`Attempting to delete user: ${user_id}`)
+
+    // 3. Delete from Auth system (This requires the Service Role Key)
+    const { data, error } = await supabaseAdmin.auth.admin.deleteUser(user_id)
+
+    if (error) {
+      console.error('Auth delete error:', error)
+      throw error
     }
 
-    // Create a Supabase client with the SERVICE_ROLE_KEY
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
-    // 1. Check if the caller is an admin
-    const authHeader = req.headers.get('Authorization')!
-    const { data: { user } } = await supabaseAdmin.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    )
+    // 4. Also explicitly delete from profiles table (just to be safe)
+    const { error: dbError } = await supabaseAdmin
+      .from('profiles')
+      .delete()
+      .eq('id', user_id)
     
-    if (user?.role !== 'admin') {
-      return new Response(JSON.stringify({ error: 'Permission denied' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 401,
-      })
+    if (dbError) {
+      console.error('DB Profile delete error:', dbError)
+      // We don't throw here, because the auth user is already gone.
     }
 
-    // 2. Delete the user from auth.users
-    // This will *also* delete the profile from 'profiles' if you have a trigger
-    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user_id)
+    return new Response(
+      JSON.stringify({ message: 'User deleted successfully' }),
+      { 
+        headers: { 'Content-Type': 'application/json' },
+        status: 200 
+      }
+    )
 
-    if (deleteError) {
-      throw deleteError
-    }
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
-    })
+    console.error('Function failed:', error.message)
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        headers: { 'Content-Type': 'application/json' },
+        status: 400 
+      }
+    )
   }
 })

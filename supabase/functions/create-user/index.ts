@@ -4,8 +4,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 serve(async (req) => {
   // 1. Create Supabase Admin Client
   const supabaseAdmin = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    Deno.env.get('MY_SUPABASE_URL') ?? '', // <-- THE FIX
+    Deno.env.get('MY_SERVICE_ROLE_KEY') ?? ''
   );
 
   // 2. Check if the caller is an 'admin'
