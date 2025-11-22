@@ -122,7 +122,7 @@ export default function LoginScreen() {
         */}
         <View style={{ height: 140 }} />
 
-        <Text style={styles.title}>Yashvi Collection</Text>
+        <Text style={styles.title}>ShreeJi Charan</Text>
 
         <View style={styles.formContainer}>
           <View style={styles.inputContainer}>

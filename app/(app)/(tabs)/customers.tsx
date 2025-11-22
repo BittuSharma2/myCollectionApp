@@ -45,21 +45,18 @@ export default function CustomersScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [optionsVisibleFor, setOptionsVisibleFor] = useState<number | null>(null);
-  const [isCollectionModalVisible, setIsCollectionModalVisible] =
-    useState(false);
-  const [selectedCustomer, setSelectedCustomer] =
-    useState<SimplifiedCustomer | null>(null);
+  const [isCollectionModalVisible, setIsCollectionModalVisible] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<SimplifiedCustomer | null>(null);
+  
   const [agentsList, setAgentsList] = useState<Agent[]>([]);
   const [selectedAgentFilter, setSelectedAgentFilter] = useState<string | null>('all');
+  const [selectedAgentName, setSelectedAgentName] = useState('All Customers');
+  
   const [isDebitModalVisible, setIsDebitModalVisible] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAgentModalVisible, setIsAgentModalVisible] = useState(false);
-  
-  // --- (THE FIX) ---
-  // Change the default text to "All Customers"
-  const [selectedAgentName, setSelectedAgentName] = useState('All Customers');
-  // --- (END FIX) ---
 
+  // --- 1. Fetch Agents (For Admin Filter) ---
   const fetchAgentsForFilter = async () => {
     const { data } = await supabase
       .from('profiles')
@@ -68,53 +65,68 @@ export default function CustomersScreen() {
     if (data) setAgentsList(data);
   };
 
-  const fetchCustomers = async () => {
+  // --- 2. Fetch Customers (Optimized for Smooth Updates) ---
+  const fetchCustomers = async (isSilentRefresh = false) => {
     if (!profile) return;
-    if (!isRefreshing) {
+    
+    // UX IMPROVEMENT: Only show spinner if list is empty and NOT a silent update
+    // This prevents the list from "flashing" or disappearing during updates
+    if (!isSilentRefresh && customers.length === 0) {
       setLoading(true);
     }
-    setCustomers([]);
-    setBalances(new Map());
+
+    // NOTE: We removed setCustomers([]) here to keep the old list visible while loading new data
+
     let query = supabase.from('customers').select(`
         id, name, shop_name, agent_id,
         initial_amount,
         profiles ( username )
       `);
+
     if (isAdmin) {
       if (selectedAgentFilter === null) {
         query = query.is('agent_id', null);
-      }
-      else if (selectedAgentFilter !== 'all') {
+      } else if (selectedAgentFilter !== 'all') {
         query = query.eq('agent_id', selectedAgentFilter);
       }
     }
+
     if (searchQuery) query = query.ilike('name', `%${searchQuery}%`);
+
     const { data: customerData, error } = await query
       .order('name', { ascending: true })
       .returns<Customer[]>();
+
     if (error) {
       console.error('Error fetching customers:', error.message);
       setLoading(false);
       setIsRefreshing(false);
       return;
     }
+
+    // --- CALCULATE BALANCES ---
     if (customerData && customerData.length > 0) {
       const customerIds = customerData.map((c) => c.id);
       const { data: transactions, error: balanceError } = await supabase
         .from('transactions')
         .select('account_id, amount')
         .in('account_id', customerIds);
+
       if (balanceError) {
         console.error('Error fetching balances:', balanceError.message);
       }
+
       const balanceMap = new Map<number, number>();
+      
+      // 1. Start with Initial Amount
       for (const customer of customerData) {
         balanceMap.set(customer.id, customer.initial_amount || 0);
       }
+
+      // 2. Add Transactions
       if (transactions) {
         for (const transaction of transactions) {
-          const currentBalance =
-            balanceMap.get(transaction.account_id) || 0;
+          const currentBalance = balanceMap.get(transaction.account_id) || 0;
           balanceMap.set(
             transaction.account_id,
             currentBalance + transaction.amount
@@ -125,59 +137,70 @@ export default function CustomersScreen() {
       setCustomers(customerData);
     } else {
       setCustomers([]);
+      setBalances(new Map());
     }
+    
     setLoading(false);
     setIsRefreshing(false);
   };
 
+  // Initial Load of Agents
   useEffect(() => {
     if (isAdmin) fetchAgentsForFilter();
   }, [isAdmin]);
 
+  // Auto-refresh list when filters change
   useFocusEffect(
     useCallback(() => {
-      fetchCustomers();
+      fetchCustomers(false);
     }, [profile, selectedAgentFilter, searchQuery])
   );
-  
-  const onRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    fetchCustomers();
-  }, [profile, selectedAgentFilter, searchQuery]);
 
+  // --- 3. Pull-to-Refresh Logic ---
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    const promises = [fetchCustomers(true)]; // Silent refresh
+    if (isAdmin) {
+      promises.push(fetchAgentsForFilter());
+    }
+    await Promise.all(promises);
+    setIsRefreshing(false);
+  }, [profile, selectedAgentFilter, searchQuery, isAdmin]);
+
+  // (Handlers)
   const handleStatePress = (customer: Customer) => {
-    router.push({
-      pathname: '/(app)/customer_profile' as any,
-      params: { customerId: customer.id },
-    });
+    router.push({ pathname: '/(app)/customer_profile' as any, params: { customerId: customer.id } });
     setOptionsVisibleFor(null);
   };
   const handleViewPress = (customer: Customer) => {
-    router.push({
-      pathname: '/(app)/customer_profile' as any,
-      params: { customerId: customer.id },
-    });
+    router.push({ pathname: '/(app)/customer_profile' as any, params: { customerId: customer.id } });
     setOptionsVisibleFor(null);
   };
+  
   const handleCollectPress = (customer: Customer) => {
     setSelectedCustomer({ id: customer.id, name: customer.name });
     setIsCollectionModalVisible(true);
     setOptionsVisibleFor(null);
   };
+  
+  // --- THE FIX: Silent Refresh on Success ---
   const onCollectionSuccess = () => {
     setIsCollectionModalVisible(false);
     setSelectedCustomer(null);
-    fetchCustomers();
+    fetchCustomers(true); // True = Update balances without loading spinner
   };
+
   const handleDebitPress = (customer: Customer) => {
     setSelectedCustomer({ id: customer.id, name: customer.name });
     setIsDebitModalVisible(true);
     setOptionsVisibleFor(null);
   };
+
+  // --- THE FIX: Silent Refresh on Success ---
   const onDebitSuccess = () => {
     setIsDebitModalVisible(false);
     setSelectedCustomer(null);
-    fetchCustomers();
+    fetchCustomers(true); // True = Update balances without loading spinner
   };
 
   const styles = StyleSheet.create({
@@ -258,7 +281,6 @@ export default function CustomersScreen() {
   });
 
   const renderCustomerItem = ({ item }: { item: Customer }) => {
-    // (This function is unchanged)
     const isSelected = optionsVisibleFor === item.id;
     const agentName = item.profiles?.username || 'Unassigned';
     const totalBalance = balances.get(item.id) || item.initial_amount || 0;
@@ -341,11 +363,13 @@ export default function CustomersScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <CustomHeader title={isAdmin ? 'Customers' : 'My Customers'} />
+
       <SearchBar
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         placeholder="Search by Customer Name"
       />
+
       {isAdmin && (
         <View style={styles.filterContainer}>
           <Text style={styles.filterLabel}>Filter by Agent:</Text>
@@ -361,6 +385,7 @@ export default function CustomersScreen() {
           </Pressable>
         </View>
       )}
+
       {loading && !isRefreshing ? (
         <ActivityIndicator
           size="large"
@@ -388,6 +413,7 @@ export default function CustomersScreen() {
           }
         />
       )}
+
       <AddCollectionModal
         visible={isCollectionModalVisible}
         onClose={() => setIsCollectionModalVisible(false)}
@@ -413,6 +439,7 @@ export default function CustomersScreen() {
           setSelectedAgentName(selection.name);
         }}
       />
+
       {isAdmin && (
         <Pressable
           style={styles.fab}
