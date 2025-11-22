@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-    FlatList,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    useColorScheme,
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
@@ -51,7 +51,7 @@ export default function AgentPickerModal({
     // Change the text from "All Agents" to "All Customers"
     ...(showAllOption ? [{ id: 'all', name: 'All Customers' }] : []),
     // --- (END FIX) ---
-    ...(showNoneOption ? [{ id: null, name: 'None (Unassigned)' }] : []),
+    // ...(showNoneOption ? [{ id: null, name: 'None (Unassigned)' }] : []),
     ...agents.map((agent) => ({ id: agent.id, name: agent.username })),
   ];
 

@@ -16,7 +16,6 @@ import {
   useColorScheme,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import AgentPickerModal from '../../components/AgentPickerModal'; // <-- Import modal
 import { Colors } from '../../constants/theme';
 import { supabase } from '../../lib/supabase';
 
@@ -298,7 +297,7 @@ export default function EditCustomerScreen() {
             </View>
             {touched.address && errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
             
-            <Text style={styles.label}>Assign Agent</Text>
+            {/* <Text style={styles.label}>Assign Agent</Text>
             <Pressable
               style={styles.pickerButton}
               onPress={() => setIsAgentModalVisible(true)}>
@@ -308,7 +307,7 @@ export default function EditCustomerScreen() {
                 size={20}
                 color={themeColors.textSecondary}
               />
-            </Pressable>
+            </Pressable> */}
             
             <Pressable style={[styles.button, styles.submitButton]} onPress={handleSubmit} disabled={loading}>
               {loading ? (<ActivityIndicator color={themeColors.buttonPrimaryText} />) : (<Text style={styles.submitButtonText}>SAVE CHANGES</Text>)}
@@ -317,7 +316,7 @@ export default function EditCustomerScreen() {
         )}
       </SafeAreaView>
 
-      <AgentPickerModal
+      {/* <AgentPickerModal
         visible={isAgentModalVisible}
         onClose={() => setIsAgentModalVisible(false)}
         title="Assign Agent"
@@ -332,7 +331,7 @@ export default function EditCustomerScreen() {
           setSelectedAgentName(selection.name);
           // --- END FIX ---
         }}
-      />
+      /> */}
     </KeyboardAvoidingView>
   );
 }

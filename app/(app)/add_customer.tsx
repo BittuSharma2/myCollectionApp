@@ -44,15 +44,20 @@ export default function AddCustomerScreen() {
   const [aadharNo, setAadharNo] = useState('');
   const [panNo, setPanNo] = useState('');
   const [address, setAddress] = useState('');
+  
+  // --- CHANGE: Default is '0' ---
   const [initialAmount, setInitialAmount] = useState('0');
+  
   const [agents, setAgents] = useState<Agent[]>([]);
   
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [isAgentModalVisible, setIsAgentModalVisible] = useState(false);
-  const [selectedAgentName, setSelectedAgentName] = useState('None (Unassigned)');
+  // --- CHANGE: Default text implies action ---
+  const [selectedAgentName, setSelectedAgentName] = useState('Select Agent');
   
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string | null }>({});
+  const [agentError, setAgentError] = useState<string | null>(null); // New state for agent validation
   const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
@@ -99,12 +104,30 @@ export default function AddCustomerScreen() {
     const error = validateField(field, value);
     setErrors((prev) => ({ ...prev, [field]: error }));
   };
+
+  // --- NEW: Handle Amount Focus (Clear '0') ---
+  const handleAmountFocus = () => {
+    if (initialAmount === '0') {
+      setInitialAmount('');
+    }
+  };
+
+  // --- NEW: Handle Amount Blur (Restore '0' if empty) ---
+  const handleAmountBlur = () => {
+    let val = initialAmount;
+    if (val === '') {
+      val = '0';
+      setInitialAmount('0');
+    }
+    handleBlur('initialAmount', val);
+  };
   
   const handleSubmit = async () => {
     setTouched({
       name: true, shopName: true, mobileNo: true, aadharNo: true,
       panNo: true, address: true, initialAmount: true,
     });
+
     const newErrors = {
       name: validateField('name', name),
       shopName: validateField('shopName', shopName),
@@ -112,16 +135,30 @@ export default function AddCustomerScreen() {
       aadharNo: validateField('aadharNo', aadharNo),
       panNo: validateField('panNo', panNo),
       address: validateField('address', address),
-      initialAmount: validateField('initialAmount', initialAmount),
+      initialAmount: validateField('initialAmount', initialAmount === '' ? '0' : initialAmount),
     };
+
+    // --- NEW: Agent Validation ---
+    let isAgentValid = true;
+    if (!selectedAgent) {
+      setAgentError('Please assign an agent.');
+      isAgentValid = false;
+    } else {
+      setAgentError(null);
+    }
+
     setErrors(newErrors);
-    const isValid = Object.values(newErrors).every((e) => e === null);
-    if (!isValid) {
-      Alert.alert('Invalid Form', 'Please correct the errors shown in red.');
+    const isFieldsValid = Object.values(newErrors).every((e) => e === null);
+
+    if (!isFieldsValid || !isAgentValid) {
+      Alert.alert('Invalid Form', 'Please fill in all required fields.');
       return;
     }
+
     setLoading(true);
-    const parsedAmount = parseFloat(initialAmount);
+    // Ensure we parse 0 if empty string (though handleAmountBlur covers this usually)
+    const finalAmountStr = initialAmount === '' ? '0' : initialAmount;
+    const parsedAmount = parseFloat(finalAmountStr);
     
     const { error } = await supabase.from('customers').insert({
       name: name.trim(),
@@ -131,8 +168,7 @@ export default function AddCustomerScreen() {
       pan_card_no: panNo.toUpperCase(),
       address: address.trim(),
       initial_amount: parsedAmount,
-      agent_id: selectedAgent,
-      // --- CHANGE: Removed 'created_by' since you are the only admin ---
+      agent_id: selectedAgent, // Now required
     });
 
     setLoading(false);
@@ -228,7 +264,7 @@ export default function AddCustomerScreen() {
       backgroundColor: themeColors.background,
       padding: 15,
       height: 55,
-      marginBottom: 20,
+      marginBottom: 4, // Reduced to match others for error text space
     },
     pickerButtonText: {
       fontSize: 16,
@@ -258,46 +294,63 @@ export default function AddCustomerScreen() {
             {getValidationIcon('name', name)}
           </View>
           {touched.name && errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+          
           <Text style={styles.label}>Shop Name</Text>
           <View style={[styles.inputContainer, errors.shopName && touched.shopName && { borderColor: themeColors.danger }]}>
             <TextInput style={styles.input} placeholder="Enter shop name" placeholderTextColor={themeColors.textSecondary} value={shopName} onChangeText={setShopName} onBlur={() => handleBlur('shopName', shopName)} autoCapitalize="words"/>
             {getValidationIcon('shopName', shopName)}
           </View>
           {touched.shopName && errors.shopName && <Text style={styles.errorText}>{errors.shopName}</Text>}
+          
           <Text style={styles.label}>Mobile Number</Text>
           <View style={[styles.inputContainer, errors.mobileNo && touched.mobileNo && { borderColor: themeColors.danger }]}>
             <TextInput style={styles.input} placeholder="10 digits" placeholderTextColor={themeColors.textSecondary} value={mobileNo} onChangeText={setMobileNo} onBlur={() => handleBlur('mobileNo', mobileNo)} keyboardType="numeric" maxLength={10}/>
             {getValidationIcon('mobileNo', mobileNo)}
           </View>
           {touched.mobileNo && errors.mobileNo && <Text style={styles.errorText}>{errors.mobileNo}</Text>}
+          
           <Text style={styles.label}>Aadhar Card Number</Text>
           <View style={[styles.inputContainer, errors.aadharNo && touched.aadharNo && { borderColor: themeColors.danger }]}>
             <TextInput style={styles.input} placeholder="12 digits" placeholderTextColor={themeColors.textSecondary} value={aadharNo} onChangeText={setAadharNo} onBlur={() => handleBlur('aadharNo', aadharNo)} keyboardType="numeric" maxLength={12}/>
             {getValidationIcon('aadharNo', aadharNo)}
           </View>
           {touched.aadharNo && errors.aadharNo && <Text style={styles.errorText}>{errors.aadharNo}</Text>}
+          
           <Text style={styles.label}>PAN Card Number</Text>
           <View style={[styles.inputContainer, errors.panNo && touched.panNo && { borderColor: themeColors.danger }]}>
             <TextInput style={styles.input} placeholder="AAAAA1111A" placeholderTextColor={themeColors.textSecondary} value={panNo} onChangeText={(text) => setPanNo(text.toUpperCase())} onBlur={() => handleBlur('panNo', panNo)} autoCapitalize="characters" maxLength={10}/>
             {getValidationIcon('panNo', panNo)}
           </View>
           {touched.panNo && errors.panNo && <Text style={styles.errorText}>{errors.panNo}</Text>}
+          
           <Text style={styles.label}>Address</Text>
           <View style={[styles.inputContainer, errors.address && touched.address && { borderColor: themeColors.danger }]}>
             <TextInput style={styles.input} placeholder="Enter full address" placeholderTextColor={themeColors.textSecondary} value={address} onChangeText={setAddress} onBlur={() => handleBlur('address', address)} autoCapitalize="words"/>
             {getValidationIcon('address', address)}
           </View>
           {touched.address && errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
+          
           <Text style={styles.label}>Initial Amount</Text>
           <View style={[styles.inputContainer, errors.initialAmount && touched.initialAmount && { borderColor: themeColors.danger }]}>
-            <TextInput style={styles.input} placeholder="0" placeholderTextColor={themeColors.textSecondary} value={initialAmount} onChangeText={setInitialAmount} onBlur={() => handleBlur('initialAmount', initialAmount)} keyboardType="numeric"/>
+            <TextInput 
+              style={styles.input} 
+              placeholder="0" 
+              placeholderTextColor={themeColors.textSecondary} 
+              value={initialAmount} 
+              onChangeText={setInitialAmount} 
+              // --- CHANGE: Better UX handlers ---
+              onFocus={handleAmountFocus}
+              onBlur={handleAmountBlur}
+              keyboardType="numeric"
+            />
             {getValidationIcon('initialAmount', initialAmount)}
           </View>
           {touched.initialAmount && errors.initialAmount && <Text style={styles.errorText}>{errors.initialAmount}</Text>}
 
-          <Text style={styles.label}>Assign Agent (Optional)</Text>
+          {/* --- CHANGE: Added Required Asterisk --- */}
+          <Text style={styles.label}>Assign Agent *</Text>
           <Pressable
-            style={styles.pickerButton}
+            style={[styles.pickerButton, agentError ? { borderColor: themeColors.danger } : {}]}
             onPress={() => setIsAgentModalVisible(true)}>
             <Text style={styles.pickerButtonText}>{selectedAgentName}</Text>
             <Ionicons
@@ -306,6 +359,8 @@ export default function AddCustomerScreen() {
               color={themeColors.textSecondary}
             />
           </Pressable>
+          {/* --- CHANGE: Display Agent Error --- */}
+          {agentError && <Text style={styles.errorText}>{agentError}</Text>}
 
           <Pressable
             style={[styles.button, styles.submitButton]}
@@ -327,10 +382,12 @@ export default function AddCustomerScreen() {
         agents={agents}
         currentSelectionId={selectedAgent}
         showAllOption={false}
-        showNoneOption={true}
+        // --- CHANGE: Disabled 'None' option ---
+        showNoneOption={false}
         onSelect={(selection) => {
           setSelectedAgent(selection.id); 
           setSelectedAgentName(selection.name);
+          setAgentError(null); // Clear error on select
         }}
       />
     </KeyboardAvoidingView>
